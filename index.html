@@ -569,7 +569,7 @@ a{color:var(--accent)}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="4.6.0";
+const APP_VERSION="4.6.1";
 const CHANGELOG=[];
 document.getElementById("app-ver").textContent=APP_VERSION;
 
@@ -1973,10 +1973,11 @@ function vAyuda(){
   <div><h2>Ayuda y copias</h2></div>
   <div class="grid2">
    <div class="panel"><h3>Primeros pasos</h3><ol>
-    <li>Importa tu <b>Finanzas Personales.xlsx</b>. Se leen las hojas con las tablas de ING y de Trade Republic, con sus categorías, meses, tipo de flujo y observaciones tal cual (las categorías quedan fijadas como «Excel maestro»).</li>
-    <li>En <b>Reglas</b>, añade tu nombre tal como aparece en las transferencias y, si quieres, la cuota del alquiler.</li>
-    <li>En <b>Patrimonio</b>, introduce el último NAV de cada ETF (aparecen solos por su ISIN).</li>
-    <li>Cada mes: importa los extractos nuevos y sigue la lista de <b>Revisión</b>.</li></ol></div>
+    <li>Da de alta tus cuentas con el asistente de inicio o en <b>Reglas › Cuentas y bancos</b>, con el IBAN de cada una, y añade en <b>Tu nombre</b> el nombre tal como aparece en las transferencias.</li>
+    <li>En <b>Movimientos</b>, importa un extracto de cada cuenta (Excel, CSV o PDF, según lo que ofrezca tu banco). Si tienes una copia en Excel de esta herramienta, también se importa con sus categorías, meses, tipo de flujo y observaciones.</li>
+    <li>Si quieres, crea el <b>asiento de apertura</b> de cada cuenta (Reglas › Cuentas y bancos) e indica en Reglas la cuota del alquiler.</li>
+    <li>En <b>Patrimonio</b>, revisa el precio de cada fondo: aparecen solos por su ISIN al importar sus compras.</li>
+    <li>Cada mes: importa los extractos nuevos, sigue la lista de <b>Revisión</b> y, al terminar, marca el mes como <b>Completo</b> en Resumen para ver su cierre.</li></ol></div>
    <div class="panel"><h3>Formatos que entiende</h3><ul>
     <li><b>ING</b>: el .xls de movimientos (F. VALOR, CATEGORÍA, SUBCATEGORÍA, DESCRIPCIÓN, COMENTARIO, IMPORTE, SALDO). Viene del más reciente al más antiguo y se invierte solo.</li>
     <li><b>Trade Republic</b>: CSV o Excel con Fecha, Tipo, Descripción, Entrada, Salida y Saldo.</li>
