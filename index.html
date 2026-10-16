@@ -569,8 +569,9 @@ a{color:var(--accent)}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="4.5.0";
+const APP_VERSION="4.6.0";
 const CHANGELOG=[
+ ["4.6.0","En el móvil, arrastrar en horizontal desde el centro de la pantalla pasa a la pestaña siguiente o anterior, en el orden de tus pestañas. Cada pestaña recuerda la altura a la que la dejaste."],
  ["4.5.0","Volver atrás en el móvil arrastrando desde el borde izquierdo (o con el botón atrás de Android): vuelve a la página anterior, con sus filtros y a la misma altura en la que estabas. El gesto también cierra los paneles abiertos."],
  ["4.4.0","Resumen: al pulsar un KPI se abren sus movimientos con el mismo periodo (año, o hasta el último mes cerrado) y sin los extraordinarios si están excluidos; el de patrimonio lleva a Patrimonio. Los enlaces a movimientos respetan también el interruptor de extraordinarios."],
  ["4.3.1","El campo IBAN de cada cuenta admite también un número de cuenta o de contrato (planes, fondos…) cuando la cuenta no tiene IBAN."],
@@ -2713,6 +2714,23 @@ addEventListener("popstate",()=>{ closeOverlays(); navBack(); });
   const end=()=>{ if(x0==null) return; const ok=on&&dx>=MIN; x0=null; on=false; ind.style.opacity=0; ind.style.transform="translate(0,-50%) scale(.7)"; ind.classList.remove("ready"); document.getElementById("main").style.transform=""; if(ok) backGesture(); };
   addEventListener("touchend",end,{passive:true}); addEventListener("touchcancel",end,{passive:true});
 })();
+// Cambiar de pestaña arrastrando en horizontal (solo en el móvil). Cada pestaña recuerda su altura.
+S.tabY={};
+function goTab(v,dir){ if(!v||v===S.view) return; S.tabY[S.view]=window.scrollY; pushNav(); S.back=null; S.view=v; try{sessionStorage.setItem("fp-view",v)}catch(_){}
+  render(); window.scrollTo(0,S.tabY[v]||0);
+  const m=document.getElementById("main"); if(dir){ m.style.transition="none"; m.style.transform=`translateX(${dir*48}px)`; m.style.opacity=".3"; requestAnimationFrame(()=>{ m.style.transition="transform .22s ease-out, opacity .22s ease-out"; m.style.transform=""; m.style.opacity=""; }); } }
+(()=>{ let x0=null,y0=0,dx=0,mode=null; const EDGE=28, MIN=70;
+  const blocked=t=>{ for(let el=t;el&&el!==document.body;el=el.parentElement){ if(/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)&&el.type!=="checkbox") return true; if(el.classList&&(el.classList.contains("tbl-wrap")||el.classList.contains("filters")||el.classList.contains("seg"))&&el.scrollWidth>el.clientWidth+2) return true; if(el.id==="tabs"||el.id==="drawer-root") return true; } return false; };
+  addEventListener("touchstart",e=>{ x0=null; if(!isPhone()||e.touches.length!==1||document.querySelector(".onb,.lightbox")||document.getElementById("drawer-root").innerHTML) return;
+    const t=e.touches[0]; if(t.clientX<=EDGE||blocked(e.target)) return; x0=t.clientX; y0=t.clientY; dx=0; mode=null; },{passive:true});
+  addEventListener("touchmove",e=>{ if(x0==null) return; const t=e.touches[0]; dx=t.clientX-x0; const dy=t.clientY-y0;
+    if(!mode){ if(Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.5) mode="h"; else if(Math.abs(dy)>10){ x0=null; return; } else return; }
+    const tabs=navPref().tabs, i=tabs.indexOf(S.view), nxt=dx<0?tabs[i+1]:tabs[i-1]; const m=document.getElementById("main");
+    m.style.transition="none"; m.style.transform=`translateX(${nxt?dx*0.35:dx*0.12}px)`; },{passive:true});
+  const end=()=>{ if(x0==null) return; const m=document.getElementById("main"); m.style.transition=""; m.style.transform=""; const ok=mode==="h"&&Math.abs(dx)>=MIN; const d=dx; x0=null; mode=null;
+    if(!ok) return; const tabs=navPref().tabs, i=tabs.indexOf(S.view), nxt=d<0?tabs[i+1]:tabs[i-1]; if(nxt) goTab(nxt,d<0?1:-1); };
+  addEventListener("touchend",end,{passive:true}); addEventListener("touchcancel",end,{passive:true});
+})();
 const VIEW_META={
   movimientos:["Movimientos","Importar, revisar y corregir filas",'<path d="M4 6h16M4 12h16M4 18h10"/>'],
   revision:["Revisión","Lo pendiente de revisar cada mes",'<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>'],
@@ -2803,7 +2821,7 @@ document.addEventListener("click",e=>{
   if(t.dataset.remind==="imp"){ pushNav(); S.back=null; S.view="movimientos"; render(); window.scrollTo(0,0); const fi=document.getElementById("file-in"); if(fi) fi.click(); }
 });
 document.getElementById("ver-btn").onclick=openChangelog;
-document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; if(b.id==="tab-more"){ openMore(); return; } if(b.dataset.v!==S.view) pushNav(); S.back=null; S.view=b.dataset.v; try{sessionStorage.setItem("fp-view",S.view)}catch(_){} render(); window.scrollTo(0,0); });
+document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; if(b.id==="tab-more"){ openMore(); return; } if(b.dataset.v!==S.view){ S.tabY[S.view]=window.scrollY; pushNav(); } S.back=null; S.view=b.dataset.v; try{sessionStorage.setItem("fp-view",S.view)}catch(_){} render(); window.scrollTo(0,S.tabY[S.view]||0); });
 // Al abrir: la página elegida para este tipo de dispositivo; al recargar dentro de la misma sesión, la que estaba abierta
 try{ const v=sessionStorage.getItem("fp-view"); const np=navPref(), st=isPhone()?np.startMobile:np.startDesktop; let last=""; try{ last=localStorage.getItem("fp-last")||""; }catch(_){}
   if(VIEWS.includes(v)) S.view=v; else if(st==="__last"&&VIEWS.includes(last)) S.view=last; else if(VIEWS.includes(st)) S.view=st; }catch(_){}
