@@ -235,6 +235,10 @@ nav.tabs .fab{display:none}
 .ini-list .ell small{display:block}
 .drillrow{cursor:pointer}
 .ini-list .cbadge,.ic-n .cbadge{flex:none}
+.dup{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;background:var(--surface-2)}
+.dup-pair{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:start}
+.dup-imp{font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (max-width:700px){ .dup-pair{grid-template-columns:1fr} }
 .drillrow:hover .ell{color:var(--accent)}
 .panel.drill:hover{box-shadow:0 0 0 2px var(--accent-soft);text-decoration:none;color:inherit}
 @media (max-width:1100px){ .ini-grid,.ini-grid.three{grid-template-columns:1fr} }
@@ -646,7 +650,7 @@ a{color:var(--accent)}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="5.1.0";
+const APP_VERSION="5.2.0";
 const CHANGELOG=[];
 document.getElementById("app-ver").textContent=APP_VERSION;
 
@@ -1334,8 +1338,25 @@ async function doImport(){
   for(const b of blocks){ const plan=blockPlan(b); const rows=plan.nuevos.map(x=>makeRow(b.acc,x,b.maestro)); rows.forEach(r=>months.add(r.f.slice(0,7))); insertRows(rows); n+=rows.length; }
   autoAdjust(); invalidate(); S.pending=null; render();
   await commit();
-  toast(`${n} movimientos importados. Revisa la pestaña Revisión.`);
+  const dups=handDups().length;
+  toast(`${n} movimientos importados.`+(dups?` ${dups===1?"Uno coincide con un movimiento que añadiste a mano":dups+" coinciden con movimientos que añadiste a mano"}: revísalo en Revisión.`:" Revisa la pestaña Revisión."));
 }
+
+/* =================== MOVIMIENTOS A MANO QUE YA VIENEN EN UN EXTRACTO =================== */
+const isHand=r=>!!(r.hand||/-man-/.test(r.id));
+function handDups(){ const dis=S.cfg.dismissed||{}, used=new Set(), out=[];
+  const hands=S.rows.filter(isHand); if(!hands.length) return out;
+  for(const h of hands){ let best=null,bd=99;
+    for(const r of S.rows){ if(r===h||isHand(r)||used.has(r.id)||r.acc!==h.acc||Math.abs(r.imp-h.imp)>0.011) continue; const d=Math.abs(daysBetween(h.f,r.f)); if(d>4||dis["dup|"+h.id+"|"+r.id]) continue; if(d<bd){ bd=d; best=r; } }
+    if(best){ used.add(best.id); out.push({h,r:best,d:bd}); } }
+  return out; }
+function mergeHand(hid,rid){ const h=S.rows.find(x=>x.id===hid), r=S.rows.find(x=>x.id===rid); if(!h||!r) return;
+  const log=[];
+  if(h.src==="manual"&&(h.cat!==r.cat||h.sub!==r.sub)){ log.push(`Categoría ${r.cat} › ${r.sub} → ${h.cat} › ${h.sub} (del movimiento a mano)`); r.cat=h.cat; r.sub=h.sub; r.src="manual"; r.srcNote="Categoría del movimiento añadido a mano"; }
+  if(h.obs&&!r.obs) r.obs=h.obs; if(h.com&&!r.com) r.com=h.com; if(h.extra) r.extra=true;
+  if((h.att||[]).length) r.att=(r.att||[]).concat(h.att);
+  r.log=(r.log||[]).concat([{d:today(),t:`Fusionado con el movimiento a mano «${h.desc}»`}].concat(log.map(t=>({d:today(),t}))));
+  S.rows=S.rows.filter(x=>x!==h); autoAdjust(); invalidate(); commit(); }
 
 /* =================== REVISIÓN (spec §11) =================== */
 // Traspasos entre ING y TR: si una parte es «Movimientos excluidos», la otra (mismo importe con signo contrario, ±5 días) también debería serlo
@@ -1366,8 +1387,9 @@ function reviewData(){
   const etf=etfStats();
   const months=c.months, pend=months.filter(m=>(S.cfg.monthStatus[m]||"Parcial")!=="Completo");
   const recAlerts=recurrentes().map(x=>({x,up:!!(x.cambio&&x.cambio.a>x.cambio.de)})).filter(({x,up})=>(up&&!dis["rec|"+x.k+"|"+x.lastId])||(!up&&x.nuevo&&!dis["recn|"+x.k]));
-  return {recAlerts,breaks,breaksOk,unknownMerchants,transfers,unknownTypes,refunds,unknownCats,obs,overrides,etf,pend,halfPairs,
-    total:recAlerts.length+halfPairs.length+breaks.length+Object.keys(unknownMerchants).length+transfers.length+unknownTypes.length+refunds.length+unknownCats.length+obs.length};
+  const dups=handDups();
+  return {dups,recAlerts,breaks,breaksOk,unknownMerchants,transfers,unknownTypes,refunds,unknownCats,obs,overrides,etf,pend,halfPairs,
+    total:dups.length+recAlerts.length+halfPairs.length+breaks.length+Object.keys(unknownMerchants).length+transfers.length+unknownTypes.length+refunds.length+unknownCats.length+obs.length};
 }
 
 /* =================== GRÁFICOS =================== */
@@ -1566,6 +1588,9 @@ function vRev(rd){
   const um=Object.entries(rd.unknownMerchants);
   const e=etfStats();
   const sec=[];
+  if(rd.dups.length) sec.push(`<div class="panel"><h3>Movimientos a mano que ya vienen en un extracto (${rd.dups.length})</h3><p class="note">Los añadiste a mano y el banco trae uno de la misma cuenta, con el mismo importe y fecha parecida. <b>Fusionar</b> deja el del banco y conserva tu categoría, nota y tickets; <b>Eliminar el mío</b> borra el que pusiste a mano.</p>
+    <div class="acclist">${rd.dups.map(({h,r,d})=>`<div class="dup"><div class="dup-pair"><div><span class="pill p-acc">A mano</span> <b>${esc(h.desc)}</b><div class="sub">${fdate(h.f)} · ${esc(accShort(h.acc))} · ${esc(h.cat)} › ${esc(h.sub)}</div></div><div><span class="pill p-no">Banco</span> <b>${esc(r.desc)}</b><div class="sub">${fdate(r.f)}${d?` (${d} ${d===1?"día":"días"} de diferencia)`:""} · ${esc(r.cat)} › ${esc(r.sub)}</div></div><b class="dup-imp">${eur(h.imp)}</b></div>
+     <div class="row"><button type="button" class="btn sm primary" data-dupm="${h.id}|${r.id}">Fusionar</button><button type="button" class="btn sm danger" data-dupd="${h.id}">Eliminar el mío</button><button type="button" class="btn sm" data-dupn="${h.id}|${r.id}">No son el mismo</button></div></div>`).join("")}</div></div>`);
   if(rd.breaksOk&&!rd.breaks.length) sec.push(`<p class="note">${rd.breaksOk} ${rd.breaksOk===1?"salto aceptado":"saltos aceptados"} en la cadena de saldos (huecos conocidos). <button class="btn sm" id="brk-reset">Volver a mostrarlos</button></p>`);
   if(rd.breaks.length) sec.push(`<div class="panel"><h3>Saltos en la cadena de saldos (${rd.breaks.length})</h3><p class="note bad">El saldo de estas filas no es el saldo anterior más su importe. Suele indicar un orden mal insertado o un movimiento que falta. El patrimonio se lee del saldo de la última fila, así que conviene resolverlo.</p>
     ${rd.breaks.some(b=>b.gap)?`<p class="note">Los marcados como <b>hueco</b> separan movimientos con semanas de diferencia: casi seguro faltan extractos de ese periodo. Impórtalos (los repetidos se descartan solos) o, si no los vas a tener, pulsa «Aceptar» para que dejen de contar como pendientes.${rd.breaksOk?` ${rd.breaksOk} ya aceptados · <button class="btn sm" id="brk-reset">Volver a mostrarlos</button>`:""}</p>`:""}
@@ -1887,7 +1912,7 @@ function openManual(){
   let sign=-1;
   root.innerHTML=`<div class="drawer-bg" id="dbg"><form class="drawer" id="mf" aria-label="Añadir movimiento">
    <div class="row"><h2>Añadir movimiento</h2><span class="spacer"></span><button type="button" class="btn" id="mf-x">Cerrar</button></div>
-   <p class="sub" style="margin:0">Para gastos en efectivo o cuentas sin extracto. Si después importas un extracto que ya lo incluye, borra este para no contarlo dos veces.</p>
+   <p class="sub" style="margin:0">Para gastos en efectivo o cuentas sin extracto. Si después importas un extracto que ya lo incluye, la app te propondrá fusionarlos para no contarlo dos veces.</p>
    <div class="seg" role="group" aria-label="Tipo"><button type="button" data-ms="-1" aria-pressed="true">Gasto</button><button type="button" data-ms="1" aria-pressed="false">Ingreso</button></div>
    <label class="f"><span>Importe (€)</span><input type="number" id="mf-imp" step="0.01" min="0" inputmode="decimal" placeholder="0,00" style="font-size:28px;font-weight:600;max-width:220px" required></label>
    <label class="f"><span>Descripción</span><input id="mf-desc" placeholder="Por ejemplo, Mercado de los sábados" required></label>
@@ -1902,7 +1927,7 @@ function openManual(){
   document.getElementById("mf").addEventListener("submit",e=>{ e.preventDefault();
     const inp=document.getElementById("mf-imp"), v=isFinite(inp.valueAsNumber)?inp.valueAsNumber:parseNum(inp.value), f=document.getElementById("mf-f").value, desc=document.getElementById("mf-desc").value.trim(), acc=document.getElementById("mf-acc").value, cs=document.getElementById("mf-cat").value;
     if(!(v>0)||!f||!desc){ toast("Indica importe, fecha y descripción."); return; }
-    const imp=Math.round(sign*v*100)/100, r={id:acc+"-man-"+uid(),acc,k:f+"#9"+uid(),f,desc,com:"",imp,saldo:null,tipo:"",cat:"",sub:"",src:"",srcNote:"",obs:"",log:[{d:today(),t:"Añadido a mano"}]};
+    const imp=Math.round(sign*v*100)/100, r={id:acc+"-man-"+uid(),hand:true,acc,k:f+"#9"+uid(),f,desc,com:"",imp,saldo:null,tipo:"",cat:"",sub:"",src:"",srcNote:"",obs:"",log:[{d:today(),t:"Añadido a mano"}]};
     if(cs){ const [c,sb]=cs.split("|"); r.cat=c; r.sub=sb; r.src="manual"; r.srcNote="Añadido a mano"; } else categorize(r);
     S.rows.push(r); autoAdjust(); invalidate(); commit(); close(); render(); toast(`Movimiento añadido: ${eur(imp)}`); });
 }
@@ -1927,6 +1952,7 @@ function vInicio(rd){
   const aC=aggOf(cm), L=S.cfg.limits||{}, over=S.cfg.cats.filter(c=>c.t==="gasto"&&+L[c.n]&&(aC.G[c.n]?._||0)>+L[c.n]);
   const closedPend=rd.pend.filter(m=>m<cm);
   const todo=[
+    [rd.dups.length,"Duplicados con movimientos a mano","revision"],
     [Object.keys(rd.unknownMerchants).length,"Comercios sin identificar","revision"],
     [rd.transfers.length,"Transferencias sin identificar","revision"],
     [rd.unknownCats.length+rd.unknownTypes.length,"Categorías por asignar","revision"],
@@ -2724,6 +2750,9 @@ const bind={
     const pairFix=ids=>{ ids.forEach(id=>{ const x=S.rows.find(r=>r.id===id); if(!x) return; x.log=(x.log||[]).concat([{d:today(),t:`Traspaso emparejado: ${x.cat} › ${x.sub} → Movimientos excluidos › Traspaso entre cuentas`}]); x.cat="Movimientos excluidos"; x.sub="Traspaso entre cuentas"; x.src="manual"; x.srcNote="Pareja de un traspaso de la otra cuenta"; }); autoAdjust(); invalidate(); commit(); render(); toast(`${ids.length} ${ids.length===1?"traspaso marcado":"traspasos marcados"} como excluidos`); };
     all("[data-pairfix]",b=>b.onclick=()=>pairFix([b.dataset.pairfix]));
     on("pairfix-all","click",()=>pairFix(reviewData().halfPairs.map(p=>p.b.id)));
+    all("[data-dupm]",b=>b.onclick=()=>{ const [h,r]=b.dataset.dupm.split("|"); mergeHand(h,r); render(); toast("Movimientos fusionados"); });
+    all("[data-dupd]",b=>b.onclick=()=>{ if(b.dataset.confirm!=="1"){ b.dataset.confirm="1"; b.textContent="Confirmar"; return; } const h=S.rows.find(x=>x.id===b.dataset.dupd); if(h&&assets) (h.att||[]).forEach(a=>assets.delete(a.id).catch(()=>{})); S.rows=S.rows.filter(x=>x!==h); invalidate(); commit(); render(); toast("Movimiento a mano eliminado"); });
+    all("[data-dupn]",b=>b.onclick=()=>{ const [h,r]=b.dataset.dupn.split("|"); S.cfg.dismissed=Object.assign({},S.cfg.dismissed,{["dup|"+h+"|"+r]:1}); saveCfg(); render(); });
     all("[data-brkok]",b=>b.onclick=()=>{ S.cfg.dismissed=Object.assign({},S.cfg.dismissed,{["brk|"+b.dataset.brkok]:1}); saveCfg(); render(); toast("Salto aceptado"); });
     on("brk-reset","click",()=>{ const d=Object.assign({},S.cfg.dismissed); Object.keys(d).forEach(k=>{ if(k.startsWith("brk|")) delete d[k]; }); S.cfg.dismissed=d; saveCfg(); render(); });
     all("[data-pairno]",b=>b.onclick=()=>{ S.cfg.dismissed=Object.assign({},S.cfg.dismissed,{["pair|"+b.dataset.pairno]:1}); saveCfg(); render(); });
