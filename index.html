@@ -182,6 +182,34 @@ nav.tabs .ic{display:none} nav.tabs button.more{display:none}
 .cierre h3{margin:4px 0 0}
 .drawer .tbl-wrap,.drawer .kpis,.drawer dl{flex-shrink:0}
 .navsec{display:none}
+nav.tabs .fab{display:none}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.tiles.three{grid-template-columns:repeat(3,1fr)}
+.tile{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;border:0;border-radius:16px;padding:14px;background:var(--surface-2);color:var(--fg);font:inherit;cursor:pointer;min-height:96px}
+.tiles.three .tile{align-items:center;text-align:center;justify-content:center;min-height:92px;padding:12px 6px}
+.tile b{font-weight:600;font-size:14px}
+.tile small{color:var(--muted);font-size:12px;line-height:1.3}
+.tile-ic{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--surface);color:var(--accent)}
+.tile.on{box-shadow:inset 0 0 0 2px var(--accent)}
+.tile:active{transform:scale(.97)}
+.more-foot{display:flex;flex-direction:column;gap:6px;align-items:flex-start;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+.more-foot b{color:var(--fg);font-weight:500}
+@media (max-width:700px){
+  header.top .brand{display:none}
+  .wrap{padding-top:env(safe-area-inset-top,0px)}
+  header.top{border-bottom:0;background:var(--bg);backdrop-filter:none}
+  .top-in{padding:0;gap:0}
+  section.view>div:first-child h2,section.view>.row:first-child h2{padding-top:6px}
+  nav.tabs{grid-template-columns:repeat(6,1fr)!important}
+  nav.tabs .fab{display:grid;place-items:center;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  nav.tabs .fab span{display:grid;place-items:center;width:50px;height:50px;border-radius:50%;background:var(--accent);color:#fff;box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 40%,transparent);transform:translateY(-10px)}
+  nav.tabs .fab:active span{transform:translateY(-10px) scale(.94)}
+  nav.tabs button[role="tab"]{font-size:10px}
+  .inicio .kpis{display:flex!important;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;margin-inline:-16px;padding:2px 16px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .inicio .kpis::-webkit-scrollbar{display:none}
+  .inicio .kpis .kpi{flex:0 0 46%;scroll-snap-align:start;min-width:0}
+  .drawer.sheet{max-height:calc(100% - 80px)}
+}
 .todo{display:flex;flex-wrap:wrap;gap:8px}
 .todo-i{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:980px;padding:7px 8px 7px 14px;background:var(--surface-2);color:var(--fg);font:inherit;font-size:13.5px;cursor:pointer}
 .todo-i b{min-width:24px;padding:1px 8px;border-radius:980px;background:var(--accent);color:#fff;font-size:12px;text-align:center}
@@ -618,7 +646,7 @@ a{color:var(--accent)}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="5.0.0";
+const APP_VERSION="5.1.0";
 const CHANGELOG=[];
 document.getElementById("app-ver").textContent=APP_VERSION;
 
@@ -1837,6 +1865,48 @@ async function readTicket(file){
     await addAttachments(b.dataset.tkatt,[fl]); document.getElementById("drawer-root").innerHTML=""; render(); });
 }
 
+/* ---------- Acciones rápidas (botón «+» del móvil) y movimiento a mano ---------- */
+function openQuick(){
+  const root=document.getElementById("drawer-root"), pm=addMonths(thisMonth(),-1);
+  const acts=[["imp","Importar extracto","Excel, CSV o PDF de tu banco",'<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19h14"/>'],
+    ...(assets&&sample?[["tk","Leer un ticket","Foto: Claude lo enlaza a su movimiento",ICONS.receipt||""]]:[]),
+    ["man","Añadir movimiento","Efectivo o cuentas sin extracto",'<path d="M12 5v14M5 12h14"/>'],
+    ["cie",`Cierre de ${MESES[+pm.slice(5)-1]}`,"Resumen del mes anterior y PDF",'<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/>']];
+  root.innerHTML=`<div class="drawer-bg" id="dbg"><div class="drawer sheet" role="dialog" aria-label="Acciones rápidas"><div class="row"><h2>Acciones rápidas</h2><span class="spacer"></span><button class="btn" id="qk-x">Cerrar</button></div>
+   <div class="tiles">${acts.map(([k,t,d,ic])=>`<button type="button" class="tile" data-qk="${k}"><span class="tile-ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic}</svg></span><b>${t}</b><small>${d}</small></button>`).join("")}</div></div></div>`;
+  const close=()=>{ root.innerHTML=""; };
+  document.getElementById("qk-x").onclick=close;
+  document.getElementById("dbg").addEventListener("click",e=>{ if(e.target.id==="dbg") close(); });
+  root.querySelectorAll("[data-qk]").forEach(b=>b.onclick=()=>{ const k=b.dataset.qk; close();
+    if(k==="imp"){ if(S.view!=="movimientos") pushNav(); S.back=null; S.view="movimientos"; render(); window.scrollTo(0,0); const fi=document.getElementById("file-in"); if(fi) fi.click(); }
+    else if(k==="tk") openTicketReader(); else if(k==="man") openManual(); else if(k==="cie") openCierre(pm); });
+}
+function openManual(){
+  const root=document.getElementById("drawer-root"), accs=ACCS().filter(a=>!a.inactiva);
+  if(!accs.length){ toast("Primero da de alta una cuenta en Reglas › Cuentas y bancos."); return; }
+  let sign=-1;
+  root.innerHTML=`<div class="drawer-bg" id="dbg"><form class="drawer" id="mf" aria-label="Añadir movimiento">
+   <div class="row"><h2>Añadir movimiento</h2><span class="spacer"></span><button type="button" class="btn" id="mf-x">Cerrar</button></div>
+   <p class="sub" style="margin:0">Para gastos en efectivo o cuentas sin extracto. Si después importas un extracto que ya lo incluye, borra este para no contarlo dos veces.</p>
+   <div class="seg" role="group" aria-label="Tipo"><button type="button" data-ms="-1" aria-pressed="true">Gasto</button><button type="button" data-ms="1" aria-pressed="false">Ingreso</button></div>
+   <label class="f"><span>Importe (€)</span><input type="number" id="mf-imp" step="0.01" min="0" inputmode="decimal" placeholder="0,00" style="font-size:28px;font-weight:600;max-width:220px" required></label>
+   <label class="f"><span>Descripción</span><input id="mf-desc" placeholder="Por ejemplo, Mercado de los sábados" required></label>
+   <div class="grid2" style="gap:10px"><label class="f"><span>Fecha</span><input type="date" id="mf-f" value="${today()}" required></label><label class="f"><span>Cuenta</span><select id="mf-acc">${accs.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select></label></div>
+   <label class="f"><span>Categoría › subcategoría</span><select id="mf-cat">${catSubOptions("",true)}</select></label>
+   <div class="row actions"><span class="spacer"></span><button type="button" class="btn" id="mf-cancel">Cancelar</button><button type="submit" class="btn primary">Guardar</button></div></form></div>`;
+  const close=()=>{ root.innerHTML=""; };
+  document.getElementById("mf-x").onclick=close; document.getElementById("mf-cancel").onclick=close;
+  document.getElementById("dbg").addEventListener("click",e=>{ if(e.target.id==="dbg") close(); });
+  root.querySelectorAll("[data-ms]").forEach(b=>b.onclick=()=>{ sign=+b.dataset.ms; root.querySelectorAll("[data-ms]").forEach(x=>x.setAttribute("aria-pressed",x===b)); });
+  setTimeout(()=>document.getElementById("mf-imp").focus(),50);
+  document.getElementById("mf").addEventListener("submit",e=>{ e.preventDefault();
+    const inp=document.getElementById("mf-imp"), v=isFinite(inp.valueAsNumber)?inp.valueAsNumber:parseNum(inp.value), f=document.getElementById("mf-f").value, desc=document.getElementById("mf-desc").value.trim(), acc=document.getElementById("mf-acc").value, cs=document.getElementById("mf-cat").value;
+    if(!(v>0)||!f||!desc){ toast("Indica importe, fecha y descripción."); return; }
+    const imp=Math.round(sign*v*100)/100, r={id:acc+"-man-"+uid(),acc,k:f+"#9"+uid(),f,desc,com:"",imp,saldo:null,tipo:"",cat:"",sub:"",src:"",srcNote:"",obs:"",log:[{d:today(),t:"Añadido a mano"}]};
+    if(cs){ const [c,sb]=cs.split("|"); r.cat=c; r.sub=sb; r.src="manual"; r.srcNote="Añadido a mano"; } else categorize(r);
+    S.rows.push(r); autoAdjust(); invalidate(); commit(); close(); render(); toast(`Movimiento añadido: ${eur(imp)}`); });
+}
+
 /* =================== INICIO: CUADRO DE MANDO =================== */
 // Suma de flujos entre dos meses contables; en el último mes, solo hasta el día dlim (para comparar tramos iguales)
 function flowsBetween(m0,m1,dlim){ const a={ing:0,gas:0,aho:0}, sx=sinExtra();
@@ -2806,7 +2876,7 @@ function goTab(v,dir){ if(!v||v===S.view) return; S.tabY[S.view]=window.scrollY;
   render(); window.scrollTo(0,S.tabY[v]||0);
   const m=document.getElementById("main"); if(dir){ m.style.transition="none"; m.style.transform=`translateX(${dir*48}px)`; m.style.opacity=".3"; requestAnimationFrame(()=>{ m.style.transition="transform .22s ease-out, opacity .22s ease-out"; m.style.transform=""; m.style.opacity=""; }); } }
 (()=>{ let x0=null,y0=0,dx=0,mode=null; const EDGE=28, MIN=70;
-  const blocked=t=>{ for(let el=t;el&&el!==document.body;el=el.parentElement){ if(/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)&&el.type!=="checkbox") return true; if(el.classList&&(el.classList.contains("tbl-wrap")||el.classList.contains("filters")||el.classList.contains("seg"))&&el.scrollWidth>el.clientWidth+2) return true; if(el.id==="tabs"||el.id==="drawer-root") return true; } return false; };
+  const blocked=t=>{ for(let el=t;el&&el!==document.body;el=el.parentElement){ if(/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)&&el.type!=="checkbox") return true; if(el.scrollWidth>el.clientWidth+2&&/(auto|scroll)/.test(getComputedStyle(el).overflowX)) return true; if(el.id==="tabs"||el.id==="drawer-root") return true; } return false; };
   addEventListener("touchstart",e=>{ x0=null; if(!isPhone()||e.touches.length!==1||document.querySelector(".onb,.lightbox")||document.getElementById("drawer-root").innerHTML) return;
     const t=e.touches[0]; if(t.clientX<=EDGE||blocked(e.target)) return; x0=t.clientX; y0=t.clientY; dx=0; mode=null; },{passive:true});
   addEventListener("touchmove",e=>{ if(x0==null) return; const t=e.touches[0]; dx=t.clientX-x0; const dy=t.clientY-y0;
@@ -2833,7 +2903,7 @@ function navPref(){ const u=(S.cfg&&S.cfg.ui)||{}; let l={}; try{ l=JSON.parse(l
   const src=Array.isArray(u.tabs)?u.tabs:Array.isArray(l.tabs)?l.tabs:[];
   const tabs=src.filter(v=>VIEWS.includes(v)); if(!tabs.includes("inicio")) tabs.unshift("inicio"); VIEWS.forEach(v=>{ if(!tabs.includes(v)) tabs.push(v); });
   const pick=(k,d)=>u[k]!=null?u[k]:l[k]!=null?l[k]:d;
-  return {tabs,startMobile:pick("startMobile","resumen"),startDesktop:pick("startDesktop","inicio")}; }
+  return {tabs,startMobile:pick("startMobile","inicio"),startDesktop:pick("startDesktop","inicio")}; }
 const isPhone=()=>window.matchMedia("(max-width:700px)").matches;
 const SECONDARY_N=4;
 const secondary=()=>navPref().tabs.slice(SECONDARY_N);
@@ -2842,7 +2912,7 @@ function renderTabs(){
   const t=navPref().tabs, nav=document.getElementById("tabs"); const key=t.join(",");
   if(nav.dataset.k===key) return; nav.dataset.k=key;
   let grp=""; const G=v=>NAV_GROUP[v]||"";
-  nav.innerHTML=t.map((v,i)=>{ const g=G(v), lab=g&&g!==grp?`<div class="navsec">${g}</div>`:""; grp=g; return lab+`<button role="tab" data-v="${v}"${i>=SECONDARY_N?' class="sec"':""}><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${VIEW_META[v][2]}</svg><span class="n">${i+1}</span>${VIEW_META[v][0]}${v==="revision"?'<span class="badge" id="rev-badge" hidden></span>':""}</button>`; }).join("")
+  nav.innerHTML=t.map((v,i)=>{ const g=G(v), lab=g&&g!==grp?`<div class="navsec">${g}</div>`:""; grp=g; return (i===2?`<button class="fab" id="tab-fab" type="button" aria-label="Acciones rápidas" aria-haspopup="dialog"><span><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></button>`:"")+lab+`<button role="tab" data-v="${v}"${i>=SECONDARY_N?' class="sec"':""}><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${VIEW_META[v][2]}</svg><span class="n">${i+1}</span>${VIEW_META[v][0]}${v==="revision"?'<span class="badge" id="rev-badge" hidden></span>':""}</button>`; }).join("")
    +`<button class="more" id="tab-more" aria-haspopup="dialog"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>Más</button>`;
 }
 function openChangelog(){
@@ -2889,8 +2959,12 @@ function openAppearance(){
 }
 function openMore(){
   const root=document.getElementById("drawer-root");
-  const items=secondary().map(v=>[v,VIEW_META[v][0],VIEW_META[v][1]]).concat([["__ui","Apariencia y páginas","Estilo, modo claro u oscuro, orden de páginas y página al abrir"]]);
-  root.innerHTML=`<div class="drawer-bg" id="dbg"><div class="drawer" role="dialog" aria-label="Más secciones"><div class="row"><h2>Más</h2><span class="spacer"></span><button class="btn" id="more-x">Cerrar</button></div>${items.map(([v,t,d])=>`<button class="more-item" data-mv="${v}"><b>${t}</b><span>${d}</span></button>`).join("")}</div></div>`;
+  const items=secondary().map(v=>[v,VIEW_META[v][0],VIEW_META[v][2]]).concat([["__ui","Apariencia",'<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.4-1.3-1.7-1.3-2.8 0-.9.7-1.5 1.7-1.5h2.3a3.5 3.5 0 0 0 3.5-3.5c0-4.2-3.6-7.5-8-7.5z"/><path d="M7.5 11.5h.01M10 7.5h.01M14.5 7.5h.01"/>']]);
+  const F=freshness(), fr=ACCS().filter(a=>F[a.id]&&!a.inactiva).map(a=>`${esc(accShort(a.id))} <b>${fdate(F[a.id].last)}</b>`).join(" · ");
+  root.innerHTML=`<div class="drawer-bg" id="dbg"><div class="drawer sheet" role="dialog" aria-label="Más secciones"><div class="row"><h2>Más</h2><span class="spacer"></span><button class="btn" id="more-x">Cerrar</button></div>
+   <div class="tiles three">${items.map(([v,t,ic])=>`<button type="button" class="tile${v===S.view?" on":""}" data-mv="${v}"><span class="tile-ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic}</svg></span><b>${t}</b></button>`).join("")}</div>
+   <div class="more-foot">${fr?`<div>Movimientos hasta: ${fr}</div>`:""}<div>${esc(document.getElementById("st-txt")?.textContent||"")}</div>${CHANGELOG.length?`<button type="button" class="btn sm" id="more-ver">Versión ${APP_VERSION} · novedades</button>`:`<div>Versión ${APP_VERSION}</div>`}</div></div></div>`;
+  const mv=document.getElementById("more-ver"); if(mv) mv.onclick=()=>openChangelog();
   const close=()=>{ root.innerHTML=""; };
   document.getElementById("more-x").onclick=close;
   document.getElementById("dbg").addEventListener("click",e=>{ if(e.target.id==="dbg") close(); });
@@ -2910,7 +2984,7 @@ document.addEventListener("click",e=>{
   if(t.dataset.remind==="imp"){ pushNav(); S.back=null; S.view="movimientos"; render(); window.scrollTo(0,0); const fi=document.getElementById("file-in"); if(fi) fi.click(); }
 });
 document.getElementById("ver-btn").disabled=true; document.getElementById("ver-btn").removeAttribute("title"); document.getElementById("ver-btn").style.cursor="default";
-document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; if(b.id==="tab-more"){ openMore(); return; } if(b.dataset.v!==S.view){ S.tabY[S.view]=window.scrollY; pushNav(); } S.back=null; S.view=b.dataset.v; try{sessionStorage.setItem("fp-view",S.view)}catch(_){} render(); window.scrollTo(0,S.tabY[S.view]||0); });
+document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; if(b.id==="tab-more"){ openMore(); return; } if(b.id==="tab-fab"){ openQuick(); return; } if(b.dataset.v!==S.view){ S.tabY[S.view]=window.scrollY; pushNav(); } S.back=null; S.view=b.dataset.v; try{sessionStorage.setItem("fp-view",S.view)}catch(_){} render(); window.scrollTo(0,S.tabY[S.view]||0); });
 // Al abrir: la página elegida para este tipo de dispositivo; al recargar dentro de la misma sesión, la que estaba abierta
 try{ const v=sessionStorage.getItem("fp-view"); const np=navPref(), st=isPhone()?np.startMobile:np.startDesktop; let last=""; try{ last=localStorage.getItem("fp-last")||""; }catch(_){}
   if(VIEWS.includes(v)) S.view=v; else if(st==="__last"&&VIEWS.includes(last)) S.view=last; else if(VIEWS.includes(st)) S.view=st; }catch(_){}
