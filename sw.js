@@ -1,5 +1,5 @@
-// Finanzas personales v4.6.2
-const CACHE="finanzas-v4.6.2";
+// Finanzas personales v5.0.0
+const CACHE="finanzas-v5.0.0";
 self.addEventListener("install",e=>{ self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c=>c.addAll(["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png","icon-180.png"]))); });
 self.addEventListener("activate",e=>{ e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
 self.addEventListener("fetch",e=>{
