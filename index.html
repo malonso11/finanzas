@@ -631,6 +631,44 @@ a{color:var(--accent)}
 .kpi b{font-size:min(28px,14.5cqi);max-width:100%}
 .kpis.mini .kpi b{font-size:min(20px,14.5cqi)}
 @media (max-width:700px){.kpi b{font-size:min(22px,14.5cqi)}}
+/* Navegación del móvil: menú lateral (por defecto) o barra inferior */
+.mbar{display:none}
+@media (max-width:700px){
+  :root[data-mnav="menu"]{--navpad:0px}
+  :root[data-mnav="menu"] nav.tabs{display:none!important}
+  :root[data-mnav="menu"] body{margin:0}
+  :root[data-mnav="menu"] header.top{display:none}
+  :root[data-mnav="menu"] .wrap{padding-top:0;padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
+  :root[data-mnav="menu"] .toast{bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+  :root[data-mnav="menu"] .selbar{bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+  :root[data-mnav="menu"] #main.has-sel{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}
+  :root[data-mnav="menu"] .mbar{display:flex;position:sticky;top:0;z-index:30;align-items:center;gap:4px;padding:calc(env(safe-area-inset-top,0px) + 4px) 8px 4px;background:color-mix(in srgb,var(--bg) 86%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(16px);backdrop-filter:saturate(1.6) blur(16px);border-bottom:1px solid transparent;transition:border-color .2s}
+  .mbar.scrolled{border-bottom-color:var(--line)}
+}
+.mb-btn{position:relative;width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:12px;background:none;color:var(--fg);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.mb-btn:active{background:var(--surface-2)}
+.mb-btn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.mb-dot{position:absolute;top:9px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 2px var(--bg)}
+.mb-t{flex:1;min-width:0;text-align:center;font-family:var(--f-disp);font-weight:600;font-size:16px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .2s}
+.mbar.scrolled .mb-t{opacity:1}
+.drawer-bg.side{justify-content:flex-start;align-items:stretch;animation:smFade .2s ease-out}
+.drawer-bg.side .drawer.sidemenu{width:min(300px,84%);height:100%;max-height:none;border:0;border-right:1px solid var(--line);border-radius:0 20px 20px 0;padding:calc(env(safe-area-inset-top,0px) + 14px) 12px calc(env(safe-area-inset-bottom,0px) + 16px);gap:2px;animation:smIn .26s cubic-bezier(.2,.8,.2,1);transition:transform .2s ease-out}
+.drawer-bg.side .drawer.sidemenu::before{display:none}
+@keyframes smIn{from{transform:translateX(-100%)}to{transform:none}}
+@keyframes smFade{from{background:transparent}}
+.sm-id{display:flex;align-items:center;gap:10px;padding:0 4px 12px 8px}
+.sm-id .mark{width:34px;height:34px;flex:none}
+.sm-id b{font-family:var(--f-disp);font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.sm-sec{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:14px 10px 4px}
+.sm-item{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:9px 10px;border:0;border-radius:12px;background:none;color:var(--fg);font:inherit;font-size:15.5px;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sm-item:active{background:var(--surface-2)}
+.sm-item svg{flex:none;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sm-item.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.sm-item .badge{margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums;color:var(--warn);background:var(--warn-soft);border-radius:999px;padding:1px 8px}
+.sm-add{color:var(--accent);font-weight:600;margin-bottom:4px}
+.sm-foot{margin-top:auto;padding:14px 10px 0;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.sm-foot b{color:var(--fg);font-weight:500}
+.sm-foot>div:first-child{margin-top:10px}
 .onb-priv{margin:22px auto 0;max-width:560px;text-align:left;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--ok) 10%,transparent);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);font-size:14px;line-height:1.45}.onb-priv b{display:block;margin-bottom:4px}.onb-priv p{margin:4px 0 0}</style>
 
 <header class="top">
@@ -646,13 +684,14 @@ a{color:var(--accent)}
     <nav class="tabs" role="tablist" id="tabs"></nav>
   </div>
 </header>
+<div class="mbar" id="mbar"><button type="button" class="mb-btn" id="mb-menu" aria-label="Abrir menú" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="mb-dot" id="mb-dot" hidden></span></button><span class="mb-t" id="mb-title"></span><button type="button" class="mb-btn" id="mb-add" aria-label="Añadir" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></button></div>
 <main class="wrap" id="main"></main>
 <div id="drawer-root"></div>
 <div id="toast-root"></div>
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="5.2.3";
+const APP_VERSION="5.3.0";
 const CHANGELOG=[];
 document.getElementById("app-ver").textContent=APP_VERSION;
 
@@ -902,7 +941,7 @@ const STYLE_DESC={soft:"Fondos tenues y líneas finas",solid:"Tarjetas con sombr
 const MODES=[["auto","Automático"],["light","Claro"],["dark","Oscuro"]];
 // Apariencia: estilo y modo. Se guarda en la herramienta (igual en todos tus dispositivos) y en el navegador para aplicarse al instante
 function uiPref(){ const u=(S.cfg&&S.cfg.ui)||{}; let l={}; try{ l=JSON.parse(localStorage.getItem("fp-ui")||"{}"); }catch(e){} return {style:u.style||l.style||"soft",mode:u.mode||l.mode||"auto"}; }
-function applyUI(){ const u=uiPref(), r=document.documentElement; r.setAttribute("data-style",u.style); if(u.mode==="auto") r.removeAttribute("data-mode"); else r.setAttribute("data-mode",u.mode); try{ localStorage.setItem("fp-ui",JSON.stringify(Object.assign({},u,navPref()))); }catch(e){} }
+function applyUI(){ const u=uiPref(), r=document.documentElement; r.setAttribute("data-style",u.style); r.setAttribute("data-mnav",navPref().mnav); if(u.mode==="auto") r.removeAttribute("data-mode"); else r.setAttribute("data-mode",u.mode); try{ localStorage.setItem("fp-ui",JSON.stringify(Object.assign({},u,navPref()))); }catch(e){} }
 const svgIcon=(name,size=16)=>`<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]||ICONS.tag}</svg>`;
 const catIcon=n=>{ const c=catByName(n); return (c&&c.icon&&ICONS[c.icon])?c.icon:(DEFAULT_ICON[n]||"tag"); };
 const BADGE_SIZE={sm:15,lg:18,xl:28};
@@ -1488,6 +1527,7 @@ function render(){
   document.querySelectorAll("#tabs button[data-v]").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===S.view));
   document.getElementById("tab-more").setAttribute("aria-selected",secondary().includes(S.view));
   const rd=reviewData(), bd=document.getElementById("rev-badge"); bd.hidden=!rd.total; bd.textContent=rd.total;
+  document.getElementById("mb-dot").hidden=!rd.total; document.getElementById("mb-title").textContent=VIEW_META[S.view]?VIEW_META[S.view][0]:"";
   const m=document.getElementById("main");
   m.innerHTML=(S.view==="movimientos"?"":remindBanner())+({inicio:vInicio,movimientos:vMov,revision:vRev,resumen:vResumen,ahorro:vAhorro,patrimonio:vPatri,limites:vLim,reglas:vReglas,ayuda:vAyuda}[S.view])(rd);
   m.querySelectorAll(".tbl-wrap.cards table").forEach(t=>{ const hs=[...t.querySelectorAll("thead th")].map(x=>x.textContent.trim()); t.querySelectorAll("tbody tr").forEach(tr=>{ if(tr.querySelector("td[colspan]")) return; [...tr.children].forEach((td,k)=>{ if(hs[k]) td.dataset.label=hs[k]; }); }); });
@@ -2934,7 +2974,7 @@ function navPref(){ const u=(S.cfg&&S.cfg.ui)||{}; let l={}; try{ l=JSON.parse(l
   const src=Array.isArray(u.tabs)?u.tabs:Array.isArray(l.tabs)?l.tabs:[];
   const tabs=src.filter(v=>VIEWS.includes(v)); if(!tabs.includes("inicio")) tabs.unshift("inicio"); VIEWS.forEach(v=>{ if(!tabs.includes(v)) tabs.push(v); });
   const pick=(k,d)=>u[k]!=null?u[k]:l[k]!=null?l[k]:d;
-  return {tabs,startMobile:pick("startMobile","inicio"),startDesktop:pick("startDesktop","inicio")}; }
+  return {tabs,startMobile:pick("startMobile","inicio"),startDesktop:pick("startDesktop","inicio"),mnav:pick("mnav","menu")==="bar"?"bar":"menu"}; }
 const isPhone=()=>window.matchMedia("(max-width:700px)").matches;
 const SECONDARY_N=3;
 const secondary=()=>navPref().tabs.slice(SECONDARY_N);
@@ -2968,14 +3008,16 @@ function openAppearance(){
    <div class="row"><h2>Apariencia</h2><span class="spacer"></span><button type="button" class="btn" id="ui-x">Cerrar</button></div>
    <fieldset><legend>Estilo</legend><div class="ui-styles">${STYLES.map(([k,l])=>`<button type="button" data-uis="${k}" aria-pressed="${cur.style===k}">${pv(k)}<div><b style="font-weight:600">${l}</b><div class="sub">${STYLE_DESC[k]}</div></div></button>`).join("")}</div></fieldset>
    <fieldset><legend>Modo</legend><div class="ui-modes">${MODES.map(([k,l])=>`<button type="button" data-uim="${k}" aria-pressed="${cur.mode===k}">${l}</button>`).join("")}</div><p class="sub" style="margin:0">Automático sigue el modo claro u oscuro de tu iPhone o tu Mac.</p></fieldset>
-   <fieldset><legend>Páginas</legend><p class="sub" style="margin:0">Ordena las páginas con las flechas. En el iPhone, las ${SECONDARY_N} primeras van en la barra inferior y el resto en «Más».</p>
-    <div class="pg-order">${np.tabs.map((v,i)=>`<div class="pg-row${i===SECONDARY_N?" cut":""}"><span class="pg-ic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${VIEW_META[v][2]}</svg></span><b>${VIEW_META[v][0]}</b><span class="spacer"></span><button type="button" class="btn sm" data-pgup="${i}" aria-label="Subir ${VIEW_META[v][0]}"${i?"":" disabled"}>↑</button><button type="button" class="btn sm" data-pgdn="${i}" aria-label="Bajar ${VIEW_META[v][0]}"${i<np.tabs.length-1?"":" disabled"}>↓</button></div>`).join("")}</div>
+   <fieldset><legend>En el iPhone</legend><div class="ui-modes" style="grid-template-columns:1fr 1fr">${[["menu","Menú lateral"],["bar","Barra inferior"]].map(([k,l])=>`<button type="button" data-mnav="${k}" aria-pressed="${np.mnav===k}">${l}</button>`).join("")}</div><p class="sub" style="margin:0">${np.mnav==="bar"?"Abajo, dos páginas, «Añadir», una página y «Más» con el resto.":"Arriba, el botón ☰ abre todas las páginas y + añade un movimiento."}</p></fieldset>
+   <fieldset><legend>Páginas</legend><p class="sub" style="margin:0">Ordena las páginas con las flechas.${np.mnav==="bar"?` En la barra inferior del iPhone van las ${SECONDARY_N} primeras y el resto en «Más».`:""}</p>
+    <div class="pg-order">${np.tabs.map((v,i)=>`<div class="pg-row${np.mnav==="bar"&&i===SECONDARY_N?" cut":""}"><span class="pg-ic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${VIEW_META[v][2]}</svg></span><b>${VIEW_META[v][0]}</b><span class="spacer"></span><button type="button" class="btn sm" data-pgup="${i}" aria-label="Subir ${VIEW_META[v][0]}"${i?"":" disabled"}>↑</button><button type="button" class="btn sm" data-pgdn="${i}" aria-label="Bajar ${VIEW_META[v][0]}"${i<np.tabs.length-1?"":" disabled"}>↓</button></div>`).join("")}</div>
     <div class="grid2" style="gap:10px"><label class="f"><span>Al abrir en el iPhone</span><select id="pg-sm">${startOpts(np.startMobile)}</select></label><label class="f"><span>Al abrir en el ordenador</span><select id="pg-sd">${startOpts(np.startDesktop)}</select></label></div>
     <button type="button" class="btn sm" id="pg-reset" style="align-self:flex-start">Restablecer orden</button></fieldset>
    <p class="note">Se aplica a toda la app y se guarda en tu herramienta, así que se ve igual en todos tus dispositivos. Los iconos de categoría siguen el estilo elegido salvo que les hayas fijado uno en Reglas.</p>
   </div></div>`;
   const setNav=patch=>{ S.cfg.ui=Object.assign({},S.cfg.ui||{},uiPref(),navPref(),patch); saveCfg(); applyUI(); renderTabs(); render(); const sc=root.querySelector(".drawer")?.scrollTop||0; openAppearance(); const d=root.querySelector(".drawer"); if(d) d.scrollTop=sc; };
   const mv=(i,d)=>{ const t=np.tabs.slice(); const j=i+d; if(j<0||j>=t.length) return; [t[i],t[j]]=[t[j],t[i]]; setNav({tabs:t}); };
+  root.querySelectorAll("[data-mnav]").forEach(b=>b.onclick=()=>setNav({mnav:b.dataset.mnav}));
   root.querySelectorAll("[data-pgup]").forEach(b=>b.onclick=()=>mv(+b.dataset.pgup,-1));
   root.querySelectorAll("[data-pgdn]").forEach(b=>b.onclick=()=>mv(+b.dataset.pgdn,1));
   document.getElementById("pg-sm").onchange=e=>setNav({startMobile:e.target.value});
@@ -2987,6 +3029,35 @@ function openAppearance(){
   root.querySelectorAll("[data-uim]").forEach(b=>b.onclick=()=>set({mode:b.dataset.uim}));
   document.getElementById("ui-x").onclick=close;
   document.getElementById("dbg").addEventListener("click",e=>{ if(e.target.id==="dbg") close(); });
+}
+function openSide(){
+  const root=document.getElementById("drawer-root"), rd=reviewData();
+  const ic=p=>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+  let grp=""; const items=navPref().tabs.map(v=>{ const g=NAV_GROUP[v]||"", lab=g&&g!==grp?`<div class="sm-sec">${g}</div>`:""; grp=g;
+    return lab+`<button type="button" class="sm-item${v===S.view?" on":""}" data-sv="${v}"${v===S.view?' aria-current="page"':""}>${ic(VIEW_META[v][2])}${VIEW_META[v][0]}${v==="revision"&&rd.total?`<span class="badge">${rd.total}</span>`:""}</button>`; }).join("");
+  const F=freshness(), fr=ACCS().filter(a=>F[a.id]&&!a.inactiva).map(a=>`${esc(accShort(a.id))} <b>${fdate(F[a.id].last)}</b>`).join(" · ");
+  root.innerHTML=`<div class="drawer-bg side" id="dbg"><nav class="drawer sidemenu" aria-label="Menú">
+   <div class="sm-id">${document.querySelector("header .mark").outerHTML.replace(/lgA/g,"lgS")}<b>Finanzas<br>personales</b></div>
+   <button type="button" class="sm-item sm-add" data-sv="__add">${ic('<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>')}Añadir</button>
+   ${items}
+   <button type="button" class="sm-item" data-sv="__ui">${ic('<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.4-1.3-1.7-1.3-2.8 0-.9.7-1.5 1.7-1.5h2.3a3.5 3.5 0 0 0 3.5-3.5c0-4.2-3.6-7.5-8-7.5z"/><path d="M7.5 11.5h.01M10 7.5h.01M14.5 7.5h.01"/>')}Apariencia</button>
+   <div class="sm-foot">${fr?`<div>Movimientos hasta: ${fr}</div>`:""}<div>${esc(document.getElementById("st-txt")?.textContent||"")}</div>${CHANGELOG.length?`<button type="button" class="btn sm" id="sm-ver">Versión ${APP_VERSION} · novedades</button>`:`<div>Versión ${APP_VERSION}</div>`}</div>
+  </nav></div>`;
+  const mb=document.getElementById("mb-menu"); mb.setAttribute("aria-expanded","true");
+  const close=()=>{ root.innerHTML=""; mb.setAttribute("aria-expanded","false"); };
+  document.getElementById("dbg").addEventListener("click",e=>{ if(e.target.id==="dbg") close(); });
+  const sv=document.getElementById("sm-ver"); if(sv) sv.onclick=()=>openChangelog();
+  root.querySelectorAll("[data-sv]").forEach(b=>b.onclick=()=>{ const v=b.dataset.sv;
+    if(v==="__add"){ close(); openQuick(); return; } if(v==="__ui"){ openAppearance(); return; }
+    close(); if(v!==S.view){ S.tabY[S.view]=window.scrollY; pushNav(); } S.back=null; S.view=v; try{sessionStorage.setItem("fp-view",v)}catch(_){} render(); window.scrollTo(0,S.tabY[v]||0); });
+  // Deslizar hacia la izquierda para cerrar
+  const d=root.querySelector(".sidemenu"); let x0=null,y0=0,dx=0,h=false;
+  d.addEventListener("touchstart",e=>{ const t=e.touches[0]; x0=t.clientX; y0=t.clientY; dx=0; h=false; },{passive:true});
+  d.addEventListener("touchmove",e=>{ if(x0==null) return; const t=e.touches[0]; dx=t.clientX-x0;
+    if(!h){ if(Math.abs(t.clientY-y0)>Math.abs(dx)){ x0=null; return; } if(dx<-8) h=true; else return; }
+    d.style.animation="none"; d.style.transition="none"; d.style.transform=`translateX(${Math.min(0,dx)}px)`; },{passive:true});
+  d.addEventListener("touchend",()=>{ if(x0==null) return; x0=null; d.style.transition="";
+    if(h&&dx<-70){ d.style.transform="translateX(-105%)"; setTimeout(close,180); } else d.style.transform=""; });
 }
 function openMore(){
   const root=document.getElementById("drawer-root");
@@ -3005,6 +3076,9 @@ let lastW=window.innerWidth;
 window.addEventListener("resize",()=>debounce("rs",()=>{ if(Math.abs(window.innerWidth-lastW)>40){ lastW=window.innerWidth; softRender(); } },250));
 applyUI(); renderTabs();
 document.getElementById("ui-btn").onclick=openAppearance;
+document.getElementById("mb-menu").onclick=openSide;
+document.getElementById("mb-add").onclick=()=>openQuick();
+addEventListener("scroll",()=>document.getElementById("mbar").classList.toggle("scrolled",window.scrollY>48),{passive:true});
 document.addEventListener("click",e=>{
   const t=e.target.closest&&e.target.closest("[data-xtra],[data-recq],[data-recok],[data-cierre],[data-remind]"); if(!t) return;
   if(t.dataset.xtra){ S.cfg.ui=Object.assign({},S.cfg.ui||{},{sinExtra:t.dataset.xtra==="sin"}); saveCfg(); render(); return; }
