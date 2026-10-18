@@ -737,6 +737,7 @@ details.info>p{margin:0}
 .an-c .ell{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .an-c .ell small{display:block}
 .an-c>b{white-space:nowrap;font-variant-numeric:tabular-nums}
+.saldo-calc{font-style:italic;color:var(--muted)}
 .sh-acc.need select{border-color:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 20%,transparent)}
 .sh-acc.need small{color:var(--warn)}
 .onb-priv{margin:22px auto 0;max-width:560px;text-align:left;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--ok) 10%,transparent);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);font-size:14px;line-height:1.45}.onb-priv b{display:block;margin-bottom:4px}.onb-priv p{margin:4px 0 0}</style>
@@ -761,8 +762,9 @@ details.info>p{margin:0}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="6.4.0";
+const APP_VERSION="6.5.0";
 const CHANGELOG=[
+ ["6.5.0","Saldo calculado para los movimientos añadidos a mano o desde capturas: se suma al último saldo del extracto y se marca como «calculado · provisional» hasta que importes el extracto. El efectivo de Patrimonio ya los incluye."],
  ["6.4.0","Capturas: si no se ve claro de qué banco es, la app pide la cuenta antes de añadir (Claude elige entre tus cuentas solo cuando es evidente). Al importar un extracto, los movimientos ya añadidos a mano o desde capturas se fusionan solos en vez de duplicarse. «Última importación» cuenta también las capturas."],
  ["6.3.1","Buscar movimientos en el móvil: al escribir ya no se reinicia el teclado (podías teclear varios números seguidos solo en otras pantallas)."],
  ["6.3.0","Devoluciones ligadas: cada movimiento que anula un gasto muestra qué gasto anula (y el gasto, sus devoluciones y el neto). Se ligan solas cuando se reconoce el comercio; desde la ficha puedes quitar el enlace, elegir otro gasto o usar su categoría."],
@@ -1126,12 +1128,17 @@ function C(){
   // cadena de saldos
   const breaks=[];
   for(const a in byAcc){ const L=byAcc[a]; for(let i=1;i<L.length;i++){ const p=L[i-1],r=L[i]; if(p.saldo==null||r.saldo==null) continue; const exp=Math.round((p.saldo+r.imp)*100)/100; if(Math.abs(exp-r.saldo)>0.011) breaks.push({acc:a,prev:p,r,exp}); } }
-  CACHE={byAcc,agg,months,breaks};
+  // Movimientos a mano o de capturas: saldo calculado a partir del último saldo real, provisional hasta que llegue el extracto
+  const calc=new Map(); for(const a in byAcc){ let run=null; for(const r of byAcc[a]){ if(r.saldo!=null){ run=r.saldo; continue; } if(run!=null&&(r.hand||/-man-/.test(r.id))){ run=Math.round((run+r.imp)*100)/100; calc.set(r.id,run); } } }
+  CACHE={byAcc,agg,months,breaks,calc};
   return CACHE;
 }
 const AGG0={ing:0,gas:0,aho:0,neto:0,G:{},I:{},otrosG:0,otrosI:0,n:0,xg:0,xn:0};
 const aggOf=m=>C().agg[m]||AGG0;
-function lastSaldo(acc){ const L=C().byAcc[acc]||[]; for(let i=L.length-1;i>=0;i--) if(L[i].saldo!=null) return {saldo:L[i].saldo,f:L[i].f}; return null; }
+function lastSaldo(acc){ const c=C(), L=c.byAcc[acc]||[]; for(let i=L.length-1;i>=0;i--){ if(L[i].saldo!=null) return {saldo:L[i].saldo,f:L[i].f}; if(c.calc.has(L[i].id)) return {saldo:c.calc.get(L[i].id),f:L[i].f,calc:true}; } return null; }
+// Saldo de una fila para mostrar: el real o, si es un movimiento a mano, el calculado (marcado como provisional)
+function saldoHTML(r,long){ if(r.saldo!=null) return eur(r.saldo); const v=C().calc.get(r.id); if(v==null) return eur(null);
+  return `<span class="saldo-calc" title="Calculado sumando este movimiento al último saldo del extracto. Es provisional: se sustituye por el real cuando importes el extracto.">≈ ${eur(v)}</span>${long?` <span class="pill p-warn">calculado · provisional</span>`:`<div class="flag">provisional</div>`}`; }
 const ISIN_RE=/\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b/;
 const isinOf=r=>r.isin||((r.desc||"").match(ISIN_RE)||[])[1]||"";
 function guessName(desc,isin){ let t=(desc.split(isin)[1]||"").replace(/,?\s*quantity:.*$/i,"").trim(); if(t.includes(" - ")) t=t.split(" - ").slice(1).join(" - "); return t.trim().slice(0,90); }
@@ -1199,7 +1206,7 @@ function freshness(){
     const L=C().byAcc[acc]||[]; if(!L.length){ out[acc]=null; continue; }
     const last=L[L.length-1].f, sal=lastSaldo(acc);
     let imp=""; for(const r of L) for(const l of (r.log||[])) if(/^(Importado|Añadido desde una captura)/.test(l.t)&&l.d>imp) imp=l.d;
-    out[acc]={last,saldoF:sal?sal.f:null,imp,days:daysBetween(last,today())};
+    out[acc]={last,saldoF:sal?sal.f:null,saldoCalc:!!(sal&&sal.calc),imp,days:daysBetween(last,today())};
   }
   return out;
 }
@@ -1817,7 +1824,7 @@ function vMov(){
      <td>${esc(r.cat)}<div class="sub">${esc(r.sub)}</div><span class="src"${r.src==="fallback"?' style="color:var(--warn)"':""}>${SRC_LBL[r.src]||r.src}</span></td>
      <td class="code">${mesOf(r)}${r.mesOv?` <span class="flag" title="Mes contable ajustado">↷</span>`:""}</td>
      <td><span class="pill ${FL_PILL[fl]}">${fl}</span>${r.flujoOv?` <span class="flag" title="${esc(r.flujoNote||"Flujo forzado")}">⚑</span>`:""}</td>
-     <td class="num"${r.imp>0?' style="color:var(--ok)"':""}>${eur(r.imp)}</td><td class="num sub">${eur(r.saldo)}</td></tr>`; }).join("");
+     <td class="num"${r.imp>0?' style="color:var(--ok)"':""}>${eur(r.imp)}</td><td class="num sub">${saldoHTML(r)}</td></tr>`; }).join("");
   const ms=C().months.slice().reverse();
   const sum=l.reduce((a,r)=>a+r.imp,0);
   return `<section class="view">
@@ -2033,7 +2040,7 @@ function patrimonioSerie(){
   const c=C(), first=c.months[0]; if(!first) return null;
   const cm=thisMonth(), ms=[]; for(let m=first;m<=cm;m=addMonths(m,1)) ms.push(m);
   const end=m=>m===cm?today():endOfMonth(m);
-  const accs=ACCS().map(a=>{ const L=(c.byAcc[a.id]||[]).filter(r=>r.saldo!=null); let i=-1; return {a,vals:ms.map(m=>{ const e=end(m); while(i+1<L.length&&L[i+1].f<=e) i++; return i>=0?L[i].saldo:0; })}; });
+  const accs=ACCS().map(a=>{ const L=(c.byAcc[a.id]||[]).map(r=>r.saldo!=null?r:(c.calc.has(r.id)?{f:r.f,saldo:c.calc.get(r.id)}:null)).filter(Boolean); let i=-1; return {a,vals:ms.map(m=>{ const e=end(m); while(i+1<L.length&&L[i+1].f<=e) i++; return i>=0?L[i].saldo:0; })}; });
   const inv=ms.map(m=>m===cm?(etfStats().valor||0):(etfStats(end(m)).valor||0));
   const tot=ms.map((_,i)=>accs.reduce((t,x)=>t+x.vals[i],0)+inv[i]);
   PSER={ms,accs,inv,tot}; return PSER;
@@ -2512,7 +2519,7 @@ function vPatri(){
     return `<div class="panel"><div class="row"><h3>Evolución del patrimonio</h3><div class="seg" role="group" aria-label="Periodo del gráfico"><button type="button" data-pevo="12" aria-pressed="${patEvoAll()?"false":"true"}">12 meses</button><button type="button" data-pevo="todo" aria-pressed="${patEvoAll()}">Todo</button></div><span class="spacer"></span><span class="sub">${y12!=null?`Últimos 12 meses ${deltaHTML(t,y12,false,true)}`:""}${y12!=null&&ini!=null?" · ":""}${ini!=null?`En ${thisMonth().slice(0,4)} ${deltaHTML(t,ini,false,true)}`:""}</span></div><div class="chart" id="ch-patevo"></div>
     <p class="note">Saldo de cada cuenta al cierre de cada mes (si falta el extracto de un mes, se mantiene el último saldo conocido) más las inversiones al último precio guardado en esa fecha o, si no lo hay, a su coste.</p></div>`; })():""}
   ${(()=>{ const F=freshness(), rowsF=ACCS().map(a=>a.id).filter(a=>F[a]); if(!rowsF.length) return "";
-    return `<div class="panel"><h3>Actualización de los datos</h3><div class="tbl-wrap cards"><table><thead><tr><th>Cuenta</th><th>Último movimiento</th><th>Último saldo</th><th>Última importación</th><th>Antigüedad</th></tr></thead><tbody>${rowsF.map(a=>{ const x=F[a]; return `<tr><td>${esc(accName(a))}</td><td>${fdate(x.last)}</td><td>${x.saldoF?fdate(x.saldoF):"—"}</td><td>${x.imp?fdate(x.imp):"—"}</td><td>${accInactiva(a)?`<span class="pill p-no">Sin actividad</span>`:x.days>STALE_DAYS?`<span class="pill p-warn">${x.days} días</span>`:`<span class="pill p-ok">${x.days} ${x.days===1?"día":"días"}</span>`}</td></tr>`; }).join("")}</tbody></table></div>
+    return `<div class="panel"><h3>Actualización de los datos</h3><div class="tbl-wrap cards"><table><thead><tr><th>Cuenta</th><th>Último movimiento</th><th>Último saldo</th><th>Última importación</th><th>Antigüedad</th></tr></thead><tbody>${rowsF.map(a=>{ const x=F[a]; return `<tr><td>${esc(accName(a))}</td><td>${fdate(x.last)}</td><td>${x.saldoF?fdate(x.saldoF)+(x.saldoCalc?` <span class="pill p-warn" title="Incluye movimientos de capturas o a mano: saldo calculado hasta que importes el extracto">provisional</span>`:""):"—"}</td><td>${x.imp?fdate(x.imp):"—"}</td><td>${accInactiva(a)?`<span class="pill p-no">Sin actividad</span>`:x.days>STALE_DAYS?`<span class="pill p-warn">${x.days} días</span>`:`<span class="pill p-ok">${x.days} ${x.days===1?"día":"días"}</span>`}</td></tr>`; }).join("")}</tbody></table></div>
     <p class="note">El efectivo de cada cuenta es el saldo a la fecha de su último saldo; los movimientos posteriores a esa fecha todavía no están importados.${rowsF.some(a=>F[a].days>STALE_DAYS&&!accInactiva(a))?" Hay una cuenta con más de "+STALE_DAYS+" días sin movimientos: importa su extracto.":""}</p></div>`; })()}
   ${e.sinPrecio.length?`<p class="note warn">Falta el precio de ${e.sinPrecio.map(x=>esc(x.nombre)).join(", ")}: su valor no suma al patrimonio hasta que lo introduzcas.</p>`:""}
   ${e.sinUnidades?`<p class="note warn">${e.sinUnidades} filas «Operar» sin unidades: no se encontró «quantity:» en la descripción. Ábrelas en Movimientos y añade las unidades.</p>`:""}
@@ -2658,7 +2665,7 @@ function openRow(id){
   setTimeout(()=>{ drawAtts(id); bindAttInputs(id); drawAnula(id); document.querySelectorAll("#rf [data-goto]").forEach(b=>b.onclick=()=>openRow(b.dataset.goto)); },0);
   root.innerHTML=`<div class="drawer-bg" id="dbg"><form class="drawer" id="rf" aria-label="Editar movimiento">
    <div class="row"><h2>Movimiento</h2><span class="acc">${esc(accShort(r.acc))}</span><span class="spacer"></span><button type="button" class="btn" id="rf-x">Cerrar</button></div>
-   <dl class="kv"><dt>Fecha</dt><dd>${fdate(r.f)}</dd><dt>Descripción</dt><dd>${esc(r.desc)}</dd>${r.tipo?`<dt>Tipo</dt><dd>${esc(r.tipo)}${r.tipoRaw&&r.tipoRaw!==r.tipo?` (${esc(r.tipoRaw)})`:""}</dd>`:""}<dt>Importe</dt><dd>${eur(r.imp)}</dd><dt>Saldo</dt><dd>${eur(r.saldo)}</dd>${r.bcat?`<dt>Categoría del banco</dt><dd>${esc(r.bcat)} › ${esc(r.bsub)}</dd>`:""}<dt>Origen de la categoría</dt><dd>${esc(SRC_LBL[r.src]||r.src)}${r.srcNote?" · "+esc(r.srcNote):""}</dd></dl>
+   <dl class="kv"><dt>Fecha</dt><dd>${fdate(r.f)}</dd><dt>Descripción</dt><dd>${esc(r.desc)}</dd>${r.tipo?`<dt>Tipo</dt><dd>${esc(r.tipo)}${r.tipoRaw&&r.tipoRaw!==r.tipo?` (${esc(r.tipoRaw)})`:""}</dd>`:""}<dt>Importe</dt><dd>${eur(r.imp)}</dd><dt>Saldo</dt><dd>${saldoHTML(r,true)}</dd>${r.bcat?`<dt>Categoría del banco</dt><dd>${esc(r.bcat)} › ${esc(r.bsub)}</dd>`:""}<dt>Origen de la categoría</dt><dd>${esc(SRC_LBL[r.src]||r.src)}${r.srcNote?" · "+esc(r.srcNote):""}</dd></dl>
    <label class="f"><span>Categoría › subcategoría</span><select id="rf-cat">${catSubOptions(r.cat+"|"+r.sub)}</select><small class="sub">Cambiarla aquí corrige el dato para siempre (origen «manual»).</small></label>
    ${r.src==="manual"?`<div><button type="button" class="btn sm" id="rf-auto">Volver a la categoría automática</button></div>`:""}
    ${r.src==="fallback"&&r.tipo==="Transacción con tarjeta"?`<label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="rf-dict" style="width:auto"> Añadir también al diccionario de comercios con el texto <input id="rf-dk" value="${esc(r.desc.replace(/\s+\d[\d\s]*$/,"").trim())}" style="max-width:220px"></label>`:""}
