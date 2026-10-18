@@ -721,6 +721,10 @@ details.info>p{margin:0}
 .sh-main input{width:100%;min-width:0}
 .sh-sub{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .sh-sub input[type=number]{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.att .sh{position:absolute;bottom:4px;right:4px;border:0;border-radius:999px;background:color-mix(in srgb,var(--bg) 85%,transparent);color:var(--fg);width:28px;height:28px;cursor:pointer;display:grid;place-items:center}
+.lightbox .btn.danger.confirm{background:var(--bad);color:#fff;border-color:var(--bad)}
+.ci-send{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:14px;background:var(--accent-soft)}
+.ci-send h3{margin:0}
 .onb-priv{margin:22px auto 0;max-width:560px;text-align:left;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--ok) 10%,transparent);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);font-size:14px;line-height:1.45}.onb-priv b{display:block;margin-bottom:4px}.onb-priv p{margin:4px 0 0}</style>
 
 <header class="top">
@@ -743,7 +747,7 @@ details.info>p{margin:0}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="6.1.0";
+const APP_VERSION="6.2.0";
 const CHANGELOG=[];
 document.getElementById("app-ver").textContent=APP_VERSION;
 
@@ -1957,10 +1961,14 @@ function cierreData(m){
   const keys=new Set(recurrentes().map(x=>x.k)), recT=rowsM.filter(r=>r.imp<0&&flujo(r)==="Gasto"&&keys.has(recKey(r.desc))).reduce((t,r)=>t-r.imp,0);
   return {m,a,obj,cats,xs,big,recT,tasa:a.ing?a.neto/a.ing:null,avgIng:avg(x=>x.ing),avgGas:avg(x=>x.gas),nPrev:prevMs.length,n:rowsM.length};
 }
-function openCierre(m){
-  const D=cierreData(m), a=D.a, root=document.getElementById("drawer-root");
+function openCierre(m,justClosed){
+  const D=cierreData(m), a=D.a, root=document.getElementById("drawer-root"), U=S.cfg.ui||{}, lb=U.lastBackup;
+  const send=`<div class="ci-send"><div class="row"><h3>${justClosed?`Mes cerrado · envía la copia`:"Enviar copia por correo"}</h3>${justClosed?`<span class="pill p-ok">Completo</span>`:""}</div>
+    <p class="sub" style="margin:0">PDF de este cierre, Excel con todas las cuentas y copia completa (JSON) para restaurar la app.${lb&&lb.m===m?` Última copia de este mes: ${fdate(lb.d)}.`:""}</p>
+    <div class="row"><input type="email" id="ci-mail" inputmode="email" autocomplete="email" placeholder="tu@correo.com" value="${esc(U.mailTo||"")}" aria-label="Correo al que enviar la copia" style="flex:1;min-width:170px"><button type="button" class="btn primary" id="ci-send" disabled>Preparando…</button></div><div id="ci-sendout"></div></div>`;
   root.innerHTML=`<div class="drawer-bg" id="dbg"><div class="drawer cierre" role="dialog" aria-label="Cierre de ${mLabel(m)}">
    <div class="row"><h2>Cierre de ${mLabel(m)}</h2><span class="spacer"></span><button type="button" class="btn" id="ci-x">Cerrar</button></div>
+   ${justClosed?send:""}
    <div class="kpis mini">
     <div class="kpi"><b>${eur0(a.ing)}</b><span>Ingresos ${D.avgIng!=null?deltaHTML(a.ing,D.avgIng,false):""}</span></div>
     <div class="kpi"><b>${eur0(a.gas)}</b><span>Gastos ${D.avgGas!=null?deltaHTML(a.gas,D.avgGas,true):""}</span></div>
@@ -1973,13 +1981,39 @@ function openCierre(m){
    <h3>Mayores gastos</h3>
    <div class="tbl-wrap"><table><tbody>${D.big.map(r=>`<tr><td class="code">${fdate(r.f)}</td><td>${esc(r.desc)}<div class="sub">${esc(r.cat)} › ${esc(r.sub)}${r.extra?" · ★ extraordinario":""}</div></td><td class="num">${eur(r.imp)}</td></tr>`).join("")||`<tr><td class="empty">—</td></tr>`}</tbody></table></div>
    <dl class="kv"><dt>Recurrentes y suscripciones</dt><dd>${eur0(D.recT)}</dd><dt>Gastos extraordinarios</dt><dd>${D.xs.length?`${eur0(-D.xs.reduce((t,r)=>t+r.imp,0))} en ${D.xs.length} ${D.xs.length===1?"movimiento":"movimientos"}`:"Ninguno"}</dd><dt>Movimientos del mes</dt><dd>${D.n}</dd></dl>
-   <div class="row actions"><span class="spacer"></span><button type="button" class="btn primary" id="ci-pdf">Descargar PDF</button></div>
+   ${justClosed?"":send}
+   <div class="row actions"><span class="spacer"></span><button type="button" class="btn" id="ci-pdf">Descargar solo el PDF</button></div>
   </div></div>`;
   const close=()=>{ root.innerHTML=""; };
   document.getElementById("ci-x").onclick=close;
   document.getElementById("dbg").addEventListener("click",e=>{ if(e.target.id==="dbg") close(); });
   document.getElementById("ci-pdf").onclick=()=>cierrePDF(D);
+  let FILES=null; const sb=document.getElementById("ci-send"), mi=document.getElementById("ci-mail");
+  cierreFiles(D).then(fs=>{ FILES=fs; if(sb){ sb.disabled=false; sb.textContent="Enviar copia"; } }).catch(()=>{ if(sb) sb.textContent="No se pudo preparar"; });
+  const saveMail=()=>{ const v=mi.value.trim(); if(v!==(S.cfg.ui||{}).mailTo){ S.cfg.ui=Object.assign({},S.cfg.ui||{},{mailTo:v}); saveCfg(); } };
+  mi.onchange=saveMail;
+  sb.onclick=async()=>{ if(!FILES) return; saveMail(); sb.disabled=true; const r=await sendCierre(D,FILES); sb.disabled=false;
+    const o=document.getElementById("ci-sendout"); if(o&&r.mailto) o.innerHTML=`<p class="sub" style="margin:6px 0">Copia descargada en un solo archivo (.zip). Abre el correo y adjúntala:</p><a class="btn" href="${r.mailto}" target="_blank" rel="noopener">Abrir correo</a>`; };
 }
+// Exportaciones reutilizables (botones de Ayuda y copia del cierre)
+async function excelAllBytes(){ const X=await XLSXlib(); const wb=X.utils.book_new(); ACCS().forEach(a=>X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([isTRacc(a.id)?HEAD_TR:HEAD_ING].concat(tableRows(a.id))),a.name.replace(/[\\/?*\[\]:]/g," ").slice(0,31)));
+  return new Uint8Array(X.write(wb,{type:"array",bookType:"xlsx"})); }
+const backupJSON=()=>JSON.stringify({app:"finanzas-personales",version:3,exportado:new Date().toISOString(),cfg:S.cfg,rows:S.rows});
+async function cierreFiles(D){
+  const [pdf,x]=await Promise.all([cierrePDF(Object.assign({},D,{asBlob:true})).catch(()=>null),excelAllBytes().catch(()=>null)]);
+  const fs=[]; if(pdf) fs.push(new File([pdf],`Cierre_${D.m}.pdf`,{type:"application/pdf"}));
+  if(x) fs.push(new File([x],`Finanzas_Personales_${D.m}.xlsx`,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  fs.push(new File([backupJSON()],`Copia_finanzas_${D.m}.json`,{type:"application/json"})); return fs; }
+// Envía la copia: hoja de compartir del móvil con los archivos o, si no hay, un .zip descargado y el correo preparado
+async function sendCierre(D,files){
+  const to=(S.cfg.ui||{}).mailTo||"", subj=`Finanzas · cierre de ${mLabel(D.m)}`,
+    body=`Cierre de ${mLabel(D.m)}: ingresos ${eur0(D.a.ing)}, gastos ${eur0(D.a.gas)}, ahorro neto ${eur0(D.a.neto)}.\n\nAdjuntos: PDF del cierre, Excel con todas las cuentas y copia completa (JSON) para restaurar la app.`;
+  const mark=()=>{ S.cfg.ui=Object.assign({},S.cfg.ui||{},{lastBackup:{m:D.m,d:today()}}); saveCfg(); };
+  try{ if(navigator.canShare&&navigator.canShare({files})){ await navigator.share({files,title:subj,text:body}); mark(); toast("Copia compartida"); return {ok:true}; } }
+  catch(e){ if(e&&e.name==="AbortError") return {ok:false}; }
+  let zip=null; try{ if(!window.JSZip) await loadScript("jszip","https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"); const z=new JSZip(); files.forEach(f=>z.file(f.name,f)); zip=await z.generateAsync({type:"blob"}); }catch(e){}
+  if(zip) await offer(`Copia_finanzas_${D.m}.zip`,zip); else for(const f of files) await offer(f.name,f);
+  mark(); return {ok:true,mailto:`mailto:${to.replace(/[^\w@.+-]/g,"")}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body+"\n\n(Adjunta el archivo descargado.)")}`}; }
 async function cierrePDF(D){
   try{ if(!window.jspdf) await loadScript("jspdf","https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"); }catch(e){ toast("No se pudo cargar el generador de PDF."); return; }
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:"mm",format:"a4"}); let y=22; const L=18, R=192;
@@ -1996,7 +2030,8 @@ async function cierrePDF(D){
   D.cats.forEach(x=>row(x.c,e(x.v),x.av==null?"—":e(x.av))); y+=4;
   title("Mayores gastos",13); D.big.forEach(r=>row(fdate(r.f)+"   "+r.desc.slice(0,55),e(r.imp))); y+=4;
   row("Recurrentes y suscripciones",e(D.recT)); row("Gastos extraordinarios",D.xs.length?e(-D.xs.reduce((t,r)=>t+r.imp,0)):"Ninguno");
-  await offer(`Cierre_${D.m}.pdf`,doc.output("blob"));
+  const blob=doc.output("blob"); if(D.asBlob) return blob;
+  await offer(`Cierre_${D.m}.pdf`,blob);
 }
 
 /* ---------- Tickets leídos por Claude ---------- */
@@ -2820,12 +2855,14 @@ function openIconEditor(init,onSave){
 const attUrl=a=>"/_blob/"+a.id;
 function drawAtts(id){
   const el=document.getElementById("rf-atts"); if(!el) return; const r=S.rows.find(x=>x.id===id); const L=(r&&r.att)||[];
-  el.innerHTML=L.length?L.map((a,i)=>`<div class="att">${/^image\//.test(a.type||"")?`<img src="${attUrl(a)}" alt="Ticket ${i+1}" loading="lazy" data-view="${i}">`:`<a class="pdf" href="${attUrl(a)}" target="_blank" rel="noopener">${svgIcon("receipt",22)}<br>${esc(a.name||"PDF")}</a>`}${assets?`<button type="button" class="x" data-attdel="${i}" aria-label="Quitar ticket">×</button>`:""}</div>`).join(""):`<p class="sub" style="margin:0;grid-column:1/-1">Sin tickets adjuntos.</p>`;
-  el.querySelectorAll("[data-view]").forEach(img=>img.onclick=()=>openLightbox(attUrl(L[+img.dataset.view])));
+  el.innerHTML=L.length?L.map((a,i)=>`<div class="att">${/^image\//.test(a.type||"")?`<img src="${attUrl(a)}" alt="Ticket ${i+1}" loading="lazy" data-view="${i}">`:`<a class="pdf" href="${attUrl(a)}" target="_blank" rel="noopener">${svgIcon("receipt",22)}<br>${esc(a.name||"PDF")}</a>`}<button type="button" class="sh" data-attsh="${i}" aria-label="Compartir" title="Compartir"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3.5M8 7.5l4-4 4 4"/><path d="M6 11H5a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 5 20h14a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 19 11h-1"/></svg></button>${assets?`<button type="button" class="x" data-attdel="${i}" aria-label="Eliminar ticket" title="Eliminar">×</button>`:""}</div>`).join(""):`<p class="sub" style="margin:0;grid-column:1/-1">Sin tickets adjuntos.</p>`;
+  const del=async a=>{ try{ await assets.delete(a.id); }catch(e){ if(!(e&&e.code==="not_found")){ toast("No se pudo eliminar el ticket."); return false; } }
+    r.att=(r.att||[]).filter(x=>x!==a); r.log=(r.log||[]).concat([{d:today(),t:"Ticket eliminado"}]); commit(); drawAtts(id); toast("Ticket eliminado"); return true; };
+  el.querySelectorAll("[data-view]").forEach(img=>img.onclick=()=>{ const a=L[+img.dataset.view]; openLightbox(attUrl(a),{name:a.name,type:a.type,onDelete:assets?()=>del(a):null}); });
+  el.querySelectorAll("[data-attsh]").forEach(b=>b.onclick=()=>{ const a=L[+b.dataset.attsh]; shareAtt(attUrl(a),a.name,a.type); });
   el.querySelectorAll("[data-attdel]").forEach(b=>b.onclick=async()=>{
-    if(!b.classList.contains("confirm")){ b.classList.add("confirm"); b.textContent="Quitar"; return; }
-    const a=L[+b.dataset.attdel]; try{ await assets.delete(a.id); }catch(e){ if(!(e&&e.code==="not_found")){ toast("No se pudo quitar el ticket."); return; } }
-    r.att=L.filter(x=>x!==a); r.log=(r.log||[]).concat([{d:today(),t:"Ticket quitado"}]); commit(); drawAtts(id); toast("Ticket quitado"); });
+    if(!b.classList.contains("confirm")){ b.classList.add("confirm"); b.textContent="Eliminar"; return; }
+    await del(L[+b.dataset.attdel]); });
 }
 async function shrinkImage(file){
   if(!/^image\/(jpeg|png|webp|heic|heif)/i.test(file.type||"")&&!/\.(heic|heif|jpe?g|png|webp)$/i.test(file.name||"")) return file;
@@ -2855,10 +2892,20 @@ async function addAttachments(id,files){
 function bindAttInputs(id){
   ["rf-cam","rf-file"].forEach(k=>{ const i=document.getElementById(k); if(i) i.onchange=()=>{ const fs=[...i.files]; i.value=""; addAttachments(id,fs); }; });
 }
-function openLightbox(src){
+// Comparte un adjunto con la hoja de compartir del móvil; si no se puede, lo descarga
+async function shareAtt(src,name,type){
+  try{ const b=await (await fetch(src)).blob(), pdf=/pdf/i.test(b.type||type||"");
+    const f=new File([b],String(name||"ticket").replace(/\.\w+$/,"")+(pdf?".pdf":".jpg"),{type:b.type||type||"image/jpeg"});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f]}); return; }
+    await offer(f.name,f); }
+  catch(e){ if(e&&e.name==="AbortError") return; toast("No se pudo compartir el ticket."); } }
+function openLightbox(src,opt){
   const d=document.createElement("div"); d.className="lightbox"; d.setAttribute("role","dialog"); d.setAttribute("aria-label","Ticket");
-  d.innerHTML=`<img src="${src}" alt="Ticket"><div class="row"><a class="btn" href="${src}" target="_blank" rel="noopener">Abrir en otra pestaña</a><button class="btn" type="button">Cerrar</button></div>`;
-  d.onclick=e=>{ if(e.target===d||e.target.tagName==="BUTTON") d.remove(); };
+  d.innerHTML=`<img src="${src}" alt="Ticket"><div class="row">${opt?`<button class="btn" type="button" data-lb="sh">Compartir</button>`:""}${opt&&opt.onDelete?`<button class="btn danger" type="button" data-lb="del">Eliminar</button>`:""}<a class="btn" href="${src}" target="_blank" rel="noopener">Abrir en otra pestaña</a><button class="btn" type="button" data-lb="x">Cerrar</button></div>`;
+  d.onclick=async e=>{ const k=e.target.dataset&&e.target.dataset.lb;
+    if(e.target===d||k==="x"){ d.remove(); return; }
+    if(k==="sh"){ shareAtt(src,opt.name,opt.type); return; }
+    if(k==="del"){ const b=e.target; if(!b.classList.contains("confirm")){ b.classList.add("confirm"); b.textContent="Confirmar eliminar"; return; } if(await opt.onDelete()) d.remove(); } };
   document.body.appendChild(d);
 }
 
@@ -3029,7 +3076,7 @@ const bind={
   },
   resumen(){
     all("[data-go]",b=>b.onclick=e=>{ e.stopPropagation(); pushNav(); S.view=b.dataset.go; render(); window.scrollTo(0,0); });
-    all("[data-kpim]",b=>b.onclick=()=>{ S.cfg.ui=Object.assign({},S.cfg.ui||{},{resKpi:b.dataset.kpim}); saveCfg(); render(); }); bindPeriod(); drawResumen(); all("[data-mstat]",b=>b.onclick=()=>{ const m=b.dataset.mstat, nv=S.cfg.monthStatus[m]==="Completo"?"Parcial":"Completo"; S.cfg.monthStatus=Object.assign({},S.cfg.monthStatus,{[m]:nv}); saveCfg(); render(); if(nv==="Completo") openCierre(m); }); },
+    all("[data-kpim]",b=>b.onclick=()=>{ S.cfg.ui=Object.assign({},S.cfg.ui||{},{resKpi:b.dataset.kpim}); saveCfg(); render(); }); bindPeriod(); drawResumen(); all("[data-mstat]",b=>b.onclick=()=>{ const m=b.dataset.mstat, nv=S.cfg.monthStatus[m]==="Completo"?"Parcial":"Completo"; S.cfg.monthStatus=Object.assign({},S.cfg.monthStatus,{[m]:nv}); saveCfg(); render(); if(nv==="Completo") openCierre(m,true); }); },
   ahorro(){ bindPeriod(); drawAhorro();
     on("cfg-obj","change",e=>{ S.cfg.objetivo=+e.target.value||0; saveCfg(); render(); }); on("cfg-umb","change",e=>{ S.cfg.umbralTasa=+e.target.value||0; saveCfg(); render(); });
     all("[data-fixed]",c=>c.onchange=()=>{ const s=c.dataset.fixed; S.cfg.fixedSubs=c.checked?S.cfg.fixedSubs.concat([s]):S.cfg.fixedSubs.filter(x=>x!==s); saveCfg(); render(); }); },
@@ -3131,9 +3178,8 @@ const bind={
   ayuda(){
     on("rs-go","click",async()=>{ if(document.getElementById("rs-word").value.trim().toUpperCase()!=="BORRAR"){ toast("Escribe BORRAR para confirmar."); return; } const keep=document.getElementById("rs-keep").checked; S.busy="Borrando…"; setStatus(); await resetAll(keep); S.busy=""; setStatus(); toast("Listo: empieza el asistente"); });
     all("[data-expacc]",b=>b.onclick=()=>{ const a=b.dataset.expacc; offer(accName(a).replace(/[^\w-]+/g,"_")+"_"+today()+".csv",csv([isTRacc(a)?HEAD_TR:HEAD_ING].concat(tableRows(a)))); });
-    on("exp-xlsx","click",async()=>{ try{ const X=await XLSXlib(); const wb=X.utils.book_new(); ACCS().forEach(a=>X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([isTRacc(a.id)?HEAD_TR:HEAD_ING].concat(tableRows(a.id))),a.name.replace(/[\\/?*\[\]:]/g," ").slice(0,31)));
-      const out=X.write(wb,{type:"array",bookType:"xlsx"}); offer("Finanzas_Personales_"+today()+".xlsx",new Uint8Array(out)); }catch(e){ toast("No se pudo generar el Excel."); } });
-    on("exp-json","click",()=>offer("finanzas_"+today()+".json",JSON.stringify({app:"finanzas-personales",version:3,exportado:new Date().toISOString(),cfg:S.cfg,rows:S.rows})));
+    on("exp-xlsx","click",async()=>{ try{ offer("Finanzas_Personales_"+today()+".xlsx",await excelAllBytes()); }catch(e){ toast("No se pudo generar el Excel."); } });
+    on("exp-json","click",()=>offer("finanzas_"+today()+".json",backupJSON()));
     on("imp-json","change",async e=>{ const f=e.target.files[0]; if(!f) return; try{ const d=JSON.parse(await f.text()); if(!Array.isArray(d.rows)) throw 0; S.cfg=mergeCfg(d.cfg||{}); S.rows=d.rows; invalidate(); if(S.mode==="db") await serial("cfg",()=>db.doc("cfg/main").set(S.cfg)); await commit(); render(); toast("Copia restaurada: "+S.rows.length+" movimientos"); }catch(err){ toast("El archivo no es una copia válida de esta herramienta."); } });
     on("del-go","click",()=>{ const m=document.getElementById("del-m").value, a=document.getElementById("del-acc").value; if(!m) return;
       document.getElementById("del-confirm").innerHTML=`<button class="btn danger" id="del-yes">Confirmar: borrar ${a?esc(accName(a)):"todas las cuentas"} · ${m==="*"?"todo":mLabel(m)}</button>`;
