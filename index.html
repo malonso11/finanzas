@@ -1963,9 +1963,9 @@ function cierreData(m){
 }
 function openCierre(m,justClosed){
   const D=cierreData(m), a=D.a, root=document.getElementById("drawer-root"), U=S.cfg.ui||{}, lb=U.lastBackup;
-  const send=`<div class="ci-send"><div class="row"><h3>${justClosed?`Mes cerrado · envía la copia`:"Enviar copia por correo"}</h3>${justClosed?`<span class="pill p-ok">Completo</span>`:""}</div>
-    <p class="sub" style="margin:0">PDF de este cierre, Excel con todas las cuentas y copia completa (JSON) para restaurar la app.${lb&&lb.m===m?` Última copia de este mes: ${fdate(lb.d)}.`:""}</p>
-    <div class="row"><input type="email" id="ci-mail" inputmode="email" autocomplete="email" placeholder="tu@correo.com" value="${esc(U.mailTo||"")}" aria-label="Correo al que enviar la copia" style="flex:1;min-width:170px"><button type="button" class="btn primary" id="ci-send" disabled>Preparando…</button></div><div id="ci-sendout"></div></div>`;
+  const send=`<div class="ci-send"><div class="row"><h3>${justClosed?`Mes cerrado · descarga la copia`:"Copia de seguridad"}</h3>${justClosed?`<span class="pill p-ok">Completo</span>`:""}</div>
+    <p class="sub" style="margin:0">Un .zip con el PDF de este cierre, el Excel con todas las cuentas y la copia completa (JSON) para restaurar la app.${lb&&lb.m===m?` Última copia de este mes: ${fdate(lb.d)}.`:""}</p>
+    <div class="row"><button type="button" class="btn primary" id="ci-send" disabled>Preparando…</button></div></div>`;
   root.innerHTML=`<div class="drawer-bg" id="dbg"><div class="drawer cierre" role="dialog" aria-label="Cierre de ${mLabel(m)}">
    <div class="row"><h2>Cierre de ${mLabel(m)}</h2><span class="spacer"></span><button type="button" class="btn" id="ci-x">Cerrar</button></div>
    ${justClosed?send:""}
@@ -1988,12 +1988,9 @@ function openCierre(m,justClosed){
   document.getElementById("ci-x").onclick=close;
   document.getElementById("dbg").addEventListener("click",e=>{ if(e.target.id==="dbg") close(); });
   document.getElementById("ci-pdf").onclick=()=>cierrePDF(D);
-  let FILES=null; const sb=document.getElementById("ci-send"), mi=document.getElementById("ci-mail");
-  cierreFiles(D).then(fs=>{ FILES=fs; if(sb){ sb.disabled=false; sb.textContent="Enviar copia"; } }).catch(()=>{ if(sb) sb.textContent="No se pudo preparar"; });
-  const saveMail=()=>{ const v=mi.value.trim(); if(v!==(S.cfg.ui||{}).mailTo){ S.cfg.ui=Object.assign({},S.cfg.ui||{},{mailTo:v}); saveCfg(); } };
-  mi.onchange=saveMail;
-  sb.onclick=async()=>{ if(!FILES) return; saveMail(); sb.disabled=true; const r=await sendCierre(D,FILES); sb.disabled=false;
-    const o=document.getElementById("ci-sendout"); if(o&&r.mailto) o.innerHTML=`<p class="sub" style="margin:6px 0">Copia descargada en un solo archivo (.zip). Abre el correo y adjúntala:</p><a class="btn" href="${r.mailto}" target="_blank" rel="noopener">Abrir correo</a>`; };
+  let FILES=null; const sb=document.getElementById("ci-send");
+  cierreFiles(D).then(fs=>{ FILES=fs; if(sb){ sb.disabled=false; sb.textContent="Descargar copia (.zip)"; } }).catch(()=>{ if(sb) sb.textContent="No se pudo preparar"; });
+  sb.onclick=async()=>{ if(!FILES) return; sb.disabled=true; await downloadCierre(D,FILES); sb.disabled=false; };
 }
 // Exportaciones reutilizables (botones de Ayuda y copia del cierre)
 async function excelAllBytes(){ const X=await XLSXlib(); const wb=X.utils.book_new(); ACCS().forEach(a=>X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([isTRacc(a.id)?HEAD_TR:HEAD_ING].concat(tableRows(a.id))),a.name.replace(/[\\/?*\[\]:]/g," ").slice(0,31)));
@@ -2004,16 +2001,11 @@ async function cierreFiles(D){
   const fs=[]; if(pdf) fs.push(new File([pdf],`Cierre_${D.m}.pdf`,{type:"application/pdf"}));
   if(x) fs.push(new File([x],`Finanzas_Personales_${D.m}.xlsx`,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   fs.push(new File([backupJSON()],`Copia_finanzas_${D.m}.json`,{type:"application/json"})); return fs; }
-// Envía la copia: hoja de compartir del móvil con los archivos o, si no hay, un .zip descargado y el correo preparado
-async function sendCierre(D,files){
-  const to=(S.cfg.ui||{}).mailTo||"", subj=`Finanzas · cierre de ${mLabel(D.m)}`,
-    body=`Cierre de ${mLabel(D.m)}: ingresos ${eur0(D.a.ing)}, gastos ${eur0(D.a.gas)}, ahorro neto ${eur0(D.a.neto)}.\n\nAdjuntos: PDF del cierre, Excel con todas las cuentas y copia completa (JSON) para restaurar la app.`;
-  const mark=()=>{ S.cfg.ui=Object.assign({},S.cfg.ui||{},{lastBackup:{m:D.m,d:today()}}); saveCfg(); };
-  try{ if(navigator.canShare&&navigator.canShare({files})){ await navigator.share({files,title:subj,text:body}); mark(); toast("Copia compartida"); return {ok:true}; } }
-  catch(e){ if(e&&e.name==="AbortError") return {ok:false}; }
+// Descarga la copia del cierre en un único .zip (o los archivos sueltos si no se puede comprimir)
+async function downloadCierre(D,files){
   let zip=null; try{ if(!window.JSZip) await loadScript("jszip","https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"); const z=new JSZip(); files.forEach(f=>z.file(f.name,f)); zip=await z.generateAsync({type:"blob"}); }catch(e){}
   if(zip) await offer(`Copia_finanzas_${D.m}.zip`,zip); else for(const f of files) await offer(f.name,f);
-  mark(); return {ok:true,mailto:`mailto:${to.replace(/[^\w@.+-]/g,"")}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body+"\n\n(Adjunta el archivo descargado.)")}`}; }
+  S.cfg.ui=Object.assign({},S.cfg.ui||{},{lastBackup:{m:D.m,d:today()}}); saveCfg(); }
 async function cierrePDF(D){
   try{ if(!window.jspdf) await loadScript("jspdf","https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"); }catch(e){ toast("No se pudo cargar el generador de PDF."); return; }
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:"mm",format:"a4"}); let y=22; const L=18, R=192;
