@@ -737,6 +737,8 @@ details.info>p{margin:0}
 .an-c .ell{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .an-c .ell small{display:block}
 .an-c>b{white-space:nowrap;font-variant-numeric:tabular-nums}
+.sh-acc.need select{border-color:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 20%,transparent)}
+.sh-acc.need small{color:var(--warn)}
 .onb-priv{margin:22px auto 0;max-width:560px;text-align:left;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--ok) 10%,transparent);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);font-size:14px;line-height:1.45}.onb-priv b{display:block;margin-bottom:4px}.onb-priv p{margin:4px 0 0}</style>
 
 <header class="top">
@@ -759,8 +761,9 @@ details.info>p{margin:0}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="6.3.1";
+const APP_VERSION="6.4.0";
 const CHANGELOG=[
+ ["6.4.0","Capturas: si no se ve claro de qué banco es, la app pide la cuenta antes de añadir (Claude elige entre tus cuentas solo cuando es evidente). Al importar un extracto, los movimientos ya añadidos a mano o desde capturas se fusionan solos en vez de duplicarse. «Última importación» cuenta también las capturas."],
  ["6.3.1","Buscar movimientos en el móvil: al escribir ya no se reinicia el teclado (podías teclear varios números seguidos solo en otras pantallas)."],
  ["6.3.0","Devoluciones ligadas: cada movimiento que anula un gasto muestra qué gasto anula (y el gasto, sus devoluciones y el neto). Se ligan solas cuando se reconoce el comercio; desde la ficha puedes quitar el enlace, elegir otro gasto o usar su categoría."],
  ["6.2.0","Al marcar un mes como Completo, el cierre ofrece «Descargar copia»: un .zip con el PDF del cierre, el Excel con todas las cuentas y la copia JSON. Los tickets adjuntos se pueden compartir y eliminar también desde la foto ampliada."],
@@ -1195,7 +1198,7 @@ function freshness(){
   for(const acc of ACCS().map(a=>a.id)){
     const L=C().byAcc[acc]||[]; if(!L.length){ out[acc]=null; continue; }
     const last=L[L.length-1].f, sal=lastSaldo(acc);
-    let imp=""; for(const r of L) for(const l of (r.log||[])) if(/^Importado/.test(l.t)&&l.d>imp) imp=l.d;
+    let imp=""; for(const r of L) for(const l of (r.log||[])) if(/^(Importado|Añadido desde una captura)/.test(l.t)&&l.d>imp) imp=l.d;
     out[acc]={last,saldoF:sal?sal.f:null,imp,days:daysBetween(last,today())};
   }
   return out;
@@ -1540,12 +1543,15 @@ function insertRows(newRows){
   S.rows=S.rows.concat(newRows);
 }
 async function doImport(){
-  const blocks=S.pending; let n=0; const months=new Set();
-  for(const b of blocks){ const plan=blockPlan(b); const rows=plan.nuevos.map(x=>makeRow(b.acc,x,b.maestro)); rows.forEach(r=>months.add(r.f.slice(0,7))); insertRows(rows); n+=rows.length; }
+  const blocks=S.pending; let n=0; const months=new Set(), nuevos=new Set();
+  for(const b of blocks){ const plan=blockPlan(b); const rows=plan.nuevos.map(x=>makeRow(b.acc,x,b.maestro)); rows.forEach(r=>{ months.add(r.f.slice(0,7)); nuevos.add(r.id); }); insertRows(rows); n+=rows.length; }
+  invalidate();
+  // Los movimientos que ya habías añadido a mano o desde una captura se fusionan con los del extracto (misma cuenta e importe, ±4 días)
+  const auto=handDups().filter(x=>nuevos.has(x.r.id)); auto.forEach(x=>mergeHand(x.h.id,x.r.id,true));
   autoAdjust(); invalidate(); S.pending=null; render();
   await commit();
-  const dups=handDups().length;
-  toast(`${n} movimientos importados.`+(dups?` ${dups===1?"Uno coincide con un movimiento que añadiste a mano":dups+" coinciden con movimientos que añadiste a mano"}: revísalo en Revisión.`:" Revisa la pestaña Revisión."));
+  const dups=handDups().length, m=auto.length;
+  toast(`${n-m} ${n-m===1?"movimiento importado":"movimientos importados"}.`+(m?` ${m===1?"1 ya estaba añadido a mano o desde una captura y se ha fusionado":m+" ya estaban añadidos a mano o desde capturas y se han fusionado"}.`:"")+(dups?` ${dups===1?"Otro podría coincidir":dups+" más podrían coincidir"} con un movimiento a mano: revísalo en Revisión.`:" Revisa la pestaña Revisión."));
 }
 
 /* =================== MOVIMIENTOS A MANO QUE YA VIENEN EN UN EXTRACTO =================== */
@@ -1556,13 +1562,15 @@ function handDups(){ const dis=S.cfg.dismissed||{}, used=new Set(), out=[];
     for(const r of S.rows){ if(r===h||isHand(r)||used.has(r.id)||r.acc!==h.acc||Math.abs(r.imp-h.imp)>0.011) continue; const d=Math.abs(daysBetween(h.f,r.f)); if(d>4||dis["dup|"+h.id+"|"+r.id]) continue; if(d<bd){ bd=d; best=r; } }
     if(best){ used.add(best.id); out.push({h,r:best,d:bd}); } }
   return out; }
-function mergeHand(hid,rid){ const h=S.rows.find(x=>x.id===hid), r=S.rows.find(x=>x.id===rid); if(!h||!r) return;
+function mergeHand(hid,rid,silent){ const h=S.rows.find(x=>x.id===hid), r=S.rows.find(x=>x.id===rid); if(!h||!r) return;
   const log=[];
   if(h.src==="manual"&&(h.cat!==r.cat||h.sub!==r.sub)){ log.push(`Categoría ${r.cat} › ${r.sub} → ${h.cat} › ${h.sub} (del movimiento a mano)`); r.cat=h.cat; r.sub=h.sub; r.src="manual"; r.srcNote="Categoría del movimiento añadido a mano"; }
   if(h.obs&&!r.obs) r.obs=h.obs; if(h.com&&!r.com) r.com=h.com; if(h.extra) r.extra=true;
   if((h.att||[]).length) r.att=(r.att||[]).concat(h.att);
-  r.log=(r.log||[]).concat([{d:today(),t:`Fusionado con el movimiento a mano «${h.desc}»`}].concat(log.map(t=>({d:today(),t}))));
-  S.rows=S.rows.filter(x=>x!==h); autoAdjust(); invalidate(); commit(); }
+  if(h.anula&&!r.anula){ r.anula=h.anula; r.anulaSrc=h.anulaSrc; } if(h.flujoOv&&!r.flujoOv){ r.flujoOv=h.flujoOv; r.flujoSrc=h.flujoSrc; r.flujoNote=h.flujoNote; }
+  S.rows.forEach(x=>{ if((x.anula||[]).includes(h.id)) x.anula=x.anula.map(i=>i===h.id?r.id:i); });
+  r.log=(r.log||[]).concat([{d:today(),t:`Fusionado con el movimiento ${/captura/.test(JSON.stringify(h.log||[]))?"de una captura":"a mano"} «${h.desc}»`}].concat(log.map(t=>({d:today(),t}))));
+  S.rows=S.rows.filter(x=>x!==h); if(silent) return; autoAdjust(); invalidate(); commit(); }
 
 /* =================== REVISIÓN (spec §11) =================== */
 // Traspasos entre ING y TR: si una parte es «Movimientos excluidos», la otra (mismo importe con signo contrario, ±5 días) también debería serlo
@@ -2164,12 +2172,14 @@ const shotLocal=()=>!window.claude;
 const shotAvailable=()=>!!sample||shotLocal();
 const MES_N={ene:1,jan:1,feb:2,mar:3,abr:4,apr:4,may:5,jun:6,jul:7,ago:8,aug:8,sep:9,set:9,oct:10,nov:11,dic:12,dec:12};
 async function shotsClaude(blobs){
-  const out=[]; let banco="";
+  const out=[]; let banco="", cuenta="";
+  const lista=ACCS().filter(a=>!a.inactiva).map(a=>({id:a.id,banco:(BANKS.find(b=>b.id===a.bank)||{}).n||a.bank||"",nombre:a.name}));
   for(let i=0;i<blobs.length;i+=4){
-    const res=await sample.json(`Estas imágenes son capturas de pantalla de la app de un banco o bróker con una lista de movimientos. Extrae TODOS los movimientos visibles. Devuelve SOLO un objeto JSON: {"banco": "nombre del banco o app si se reconoce, o null", "movimientos": [{"fecha": "AAAA-MM-DD", "concepto": "texto del movimiento tal como aparece", "importe": -12.34}]}. Reglas: "importe" negativo para pagos, cargos y compras; positivo para ingresos y abonos; con punto decimal. Si la lista agrupa por días con cabeceras («Hoy», «Ayer», «14 oct»…), aplica esa fecha a los movimientos de debajo. Hoy es ${today()}; si falta el año, usa el más reciente que no sea futuro. No incluyas saldos, totales, ni filas repetidas por el desplazamiento entre capturas. Si no hay movimientos, devuelve la lista vacía.`,{images:blobs.slice(i,i+4),modelTier:"default"});
+    const res=await sample.json(`Estas imágenes son capturas de pantalla de la app de un banco o bróker con una lista de movimientos. Cuentas posibles: ${JSON.stringify(lista)}. Indica en "cuenta" el id de la cuenta a la que pertenecen SOLO si se ve claramente (logotipo, nombre del banco, diseño inconfundible de su app o número de cuenta); si hay cualquier duda, pon null. Extrae TODOS los movimientos visibles. Devuelve SOLO un objeto JSON: {"cuenta": "id o null", "banco": "nombre del banco o app si se reconoce, o null", "movimientos": [{"fecha": "AAAA-MM-DD", "concepto": "texto del movimiento tal como aparece", "importe": -12.34}]}. Reglas: "importe" negativo para pagos, cargos y compras; positivo para ingresos y abonos; con punto decimal. Si la lista agrupa por días con cabeceras («Hoy», «Ayer», «14 oct»…), aplica esa fecha a los movimientos de debajo. Hoy es ${today()}; si falta el año, usa el más reciente que no sea futuro. No incluyas saldos, totales, ni filas repetidas por el desplazamiento entre capturas. Si no hay movimientos, devuelve la lista vacía.`,{images:blobs.slice(i,i+4),modelTier:"default"});
     if(res&&res.banco&&!banco) banco=String(res.banco);
+    if(res&&res.cuenta&&!cuenta&&lista.some(a=>a.id===res.cuenta)) cuenta=String(res.cuenta);
     (res&&Array.isArray(res.movimientos)?res.movimientos:[]).forEach(m=>{ const imp=parseNum(m.importe), f=parseDate(m.fecha); if(imp!=null) out.push({f:f||today(),desc:String(m.concepto||"").trim()||"Movimiento",imp:Math.round(imp*100)/100}); }); }
-  return {rows:out,banco};
+  return {rows:out,banco,cuenta};
 }
 // Prepara la captura para el OCR: escala de grises y, si es modo oscuro, colores invertidos
 async function shotCanvas(file){
@@ -2216,7 +2226,7 @@ function parseShotText(txt){
 function openShotReader(files){
   const root=document.getElementById("drawer-root"), accs=ACCS().filter(a=>!a.inactiva);
   if(!accs.length){ toast("Primero da de alta una cuenta en Reglas › Cuentas y bancos."); return; }
-  const W={rows:[],acc:((S.cfg.ui||{}).shotAcc&&accs.some(a=>a.id===S.cfg.ui.shotAcc))?S.cfg.ui.shotAcc:accs[0].id};
+  const W={rows:[],acc:accs.length===1?accs[0].id:"",auto:false};
   root.innerHTML=`<div class="drawer-bg" id="dbg"><div class="drawer" role="dialog" aria-label="Movimientos desde capturas">
    <div class="row"><h2>Desde capturas</h2>${shotLocal()?`<span class="pill p-no">beta</span>`:""}<span class="spacer"></span><button type="button" class="btn" id="sh-x">Cerrar</button></div>
    <p class="sub" style="margin:0">${shotLocal()?"Haz una captura de la lista de movimientos de la app de tu banco. El texto se lee en este dispositivo, sin enviar la imagen a ningún sitio; la primera vez se descarga el lector (unos 15 MB). Revisa los importes antes de añadirlos.":"Haz una captura de la lista de movimientos de la app de tu banco: Claude lee fecha, concepto e importe. Revisa la lista y añade solo lo que quieras."} Si luego importas el extracto, la app te propondrá fusionarlos para no contarlos dos veces.</p>
@@ -2230,19 +2240,19 @@ function openShotReader(files){
   const dupOf=x=>S.rows.find(r=>r.acc===W.acc&&Math.abs(r.imp-x.imp)<0.011&&Math.abs(daysBetween(r.f,x.f))<=3);
   const draw=()=>{ const o=out(); if(!o) return;
     if(!W.rows.length){ o.innerHTML=`<p class="note warn">No he encontrado movimientos en ${W.n===1?"la captura":"las capturas"}. Prueba con una captura de la lista de movimientos, sin recortar los importes.</p>`; return; }
-    W.rows.forEach(x=>{ x.dup=dupOf(x); if(x.on==null) x.on=!x.dup; });
+    W.rows.forEach(x=>{ x.dup=W.acc?dupOf(x):null; if(x.on==null) x.on=!x.dup; });
     const n=W.rows.filter(x=>x.on).length;
-    o.innerHTML=`<label class="f"><span>Cuenta</span><select id="sh-acc">${accs.map(a=>`<option value="${esc(a.id)}"${a.id===W.acc?" selected":""}>${esc(a.name)}</option>`).join("")}</select></label>
+    o.innerHTML=`<label class="f sh-acc${W.acc?"":" need"}"><span>¿De qué cuenta son?</span><select id="sh-acc">${W.acc?"":`<option value="" selected disabled>Elige la cuenta…</option>`}${accs.map(a=>`<option value="${esc(a.id)}"${a.id===W.acc?" selected":""}>${esc(a.name)} · ${esc(accShort(a.id))}</option>`).join("")}</select><small class="sub">${!W.acc?"No se ve claro de qué banco es la captura: elige la cuenta antes de añadir.":W.auto?"Detectada en la captura; cámbiala si no es correcta.":""}</small></label>
      <div class="sh-list">${W.rows.map((x,i)=>`<div class="sh-row${x.on?"":" off"}"><input type="checkbox" data-shon="${i}"${x.on?" checked":""} aria-label="Añadir este movimiento">
       <div class="sh-main"><input data-shd="${i}" value="${esc(x.desc)}" aria-label="Concepto"><div class="sh-sub"><input type="date" data-shf="${i}" value="${x.f}" aria-label="Fecha"><input type="number" step="0.01" inputmode="decimal" data-shm="${i}" value="${x.imp}" aria-label="Importe (negativo si es un gasto)" style="color:${x.imp<0?"var(--bad)":"var(--ok)"}"></div>
       ${x.dup?`<span class="sub" style="color:var(--warn)">Ya está en la app: ${fdate(x.dup.f)} · ${esc(shortDesc(x.dup.desc))}</span>`:""}</div></div>`).join("")}</div>
-     <div class="row actions"><span class="sub">Importe en negativo si es un gasto.</span><span class="spacer"></span><button type="button" class="btn primary" id="sh-ok"${n?"":" disabled"}>Añadir ${n} ${n===1?"movimiento":"movimientos"}</button></div>`;
-    o.querySelector("#sh-acc").onchange=e=>{ W.acc=e.target.value; W.rows.forEach(x=>x.on=null); draw(); };
+     <div class="row actions"><span class="sub">Importe en negativo si es un gasto.</span><span class="spacer"></span><button type="button" class="btn primary" id="sh-ok"${n&&W.acc?"":" disabled"}>${W.acc?`Añadir ${n} ${n===1?"movimiento":"movimientos"}`:"Elige la cuenta"}</button></div>`;
+    o.querySelector("#sh-acc").onchange=e=>{ W.acc=e.target.value; W.auto=false; W.rows.forEach(x=>x.on=null); draw(); };
     o.querySelectorAll("[data-shon]").forEach(c=>c.onchange=()=>{ W.rows[+c.dataset.shon].on=c.checked; draw(); });
     o.querySelectorAll("[data-shd]").forEach(c=>c.oninput=()=>{ W.rows[+c.dataset.shd].desc=c.value; });
     o.querySelectorAll("[data-shf]").forEach(c=>c.onchange=()=>{ if(c.value){ W.rows[+c.dataset.shf].f=c.value; draw(); } });
     o.querySelectorAll("[data-shm]").forEach(c=>c.onchange=()=>{ const v=isFinite(c.valueAsNumber)?c.valueAsNumber:parseNum(c.value); if(v!=null){ W.rows[+c.dataset.shm].imp=Math.round(v*100)/100; draw(); } });
-    o.querySelector("#sh-ok").onclick=()=>{ const sel=W.rows.filter(x=>x.on&&x.desc.trim()&&x.f&&x.imp); if(!sel.length) return;
+    o.querySelector("#sh-ok").onclick=()=>{ if(!W.acc) return; const sel=W.rows.filter(x=>x.on&&x.desc.trim()&&x.f&&x.imp); if(!sel.length) return;
       sel.forEach(x=>{ const r={id:W.acc+"-man-"+uid(),hand:true,acc:W.acc,k:x.f+"#9"+uid(),f:x.f,desc:x.desc.trim(),com:"",imp:x.imp,saldo:null,tipo:"",cat:"",sub:"",src:"",srcNote:"",obs:"",log:[{d:today(),t:"Añadido desde una captura"}]}; categorize(r); S.rows.push(r); });
       S.cfg.ui=Object.assign({},S.cfg.ui||{},{shotAcc:W.acc}); saveCfg();
       autoAdjust(); invalidate(); commit(); close(); render(); toast(`${sel.length} ${sel.length===1?"movimiento añadido":"movimientos añadidos"}`); };
@@ -2255,7 +2265,8 @@ function openShotReader(files){
         if(!lim||!lim.images){ o.innerHTML=`<p class="note warn">Esta vista no puede enviar imágenes a Claude. Ábrela en claude.ai y acepta el permiso de imágenes cuando te lo pida.</p>`; return; }
         res=await shotsClaude(await Promise.all(fs.map(f=>shrinkShot(f)))); }
     }catch(e){ console.error(e); o.innerHTML=`<p class="note warn">${e&&e.code==="rate_limited"?"Demasiadas peticiones seguidas; inténtalo en unos minutos.":e&&e.code==="not_granted"?"No has dado permiso para usar Claude desde esta herramienta.":shotLocal()?"No se pudo cargar el lector de capturas. Comprueba la conexión (la primera vez hay que descargarlo).":"Claude no pudo leer las capturas."}</p>`; return; }
-    if(res.banco){ const b=lo(res.banco), hit=accs.find(a=>{ const bk=BANKS.find(x=>x.id===a.bank); return bk&&(b.includes(lo(bk.n))||lo(bk.n).includes(b)); }); if(hit) W.acc=hit.id; }
+    if(res.cuenta&&accs.some(a=>a.id===res.cuenta)){ W.acc=res.cuenta; W.auto=true; }
+    else if(res.banco){ const b=lo(res.banco), hits=accs.filter(a=>{ const bk=BANKS.find(x=>x.id===a.bank); return bk&&(b.includes(lo(bk.n))||lo(bk.n).includes(b)); }); if(hits.length===1){ W.acc=hits[0].id; W.auto=true; } }
     const seen=new Set(); W.rows=res.rows.filter(x=>{ const k=x.f+"|"+x.imp+"|"+lo(x.desc); if(seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>a.f<b.f?1:-1).map(x=>Object.assign(x,{on:null}));
     draw(); }
   if(files&&files.length) read(files.filter(isImgFile));
