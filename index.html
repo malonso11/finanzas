@@ -735,7 +735,7 @@ details.info>p{margin:0}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="6.0.0";
+const APP_VERSION="6.0.1";
 const CHANGELOG=[];
 document.getElementById("app-ver").textContent=APP_VERSION;
 
@@ -1054,6 +1054,8 @@ function etfStats(asOf){
       // Marcada a mano como vendida hasta una fecha: lo comprado antes no cuenta
       if(ch&&r.f>ch&&e0&&!e0.reab){ e0.reab=true; e0.units=0; e0.aport=0; e0.buys=[]; } }
     const pmk=PM_RE.test(r.desc||"");
+    // El «Bonus del 1 %» de Private Markets es un abono (ingreso), no una venta: no toca lo aportado
+    if(pmk&&r.imp>0&&(/bonus|bono/i.test(r.desc||"")||r.cat!=="Ahorro e inversión")) continue;
     const e=get(pmk?PM_ID:(isinOf(r)||"SIN-ISIN"),r); e.neto+=-r.imp; e.n++;
     // Private Markets: no hay ISIN ni participaciones; se lleva el importe aportado y se valora a mano (o al coste)
     if(pmk){ e.kind="valor"; e.buys=e.buys||[];
