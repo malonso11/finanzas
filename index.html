@@ -738,6 +738,9 @@ details.info>p{margin:0}
 .an-c .ell small{display:block}
 .an-c>b{white-space:nowrap;font-variant-numeric:tabular-nums}
 .saldo-calc{font-style:italic;color:var(--muted)}
+.inst-panel .inst-steps{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:3px}
+.cl-more>summary{cursor:pointer;color:var(--accent);font-size:14px;font-weight:500;padding:10px 0;list-style:none}
+.cl-more>summary::-webkit-details-marker{display:none}
 .sh-acc.need select{border-color:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 20%,transparent)}
 .sh-acc.need small{color:var(--warn)}
 .onb-priv{margin:22px auto 0;max-width:560px;text-align:left;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--ok) 10%,transparent);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);font-size:14px;line-height:1.45}.onb-priv b{display:block;margin-bottom:4px}.onb-priv p{margin:4px 0 0}.inst-panel .inst-steps,.inst-banner .inst-steps{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
@@ -770,8 +773,9 @@ details.info>p{margin:0}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="6.5.0";
+const APP_VERSION="6.5.1";
 const CHANGELOG=[
+ ["6.5.1","El historial de versiones se puede plegar: en Ayuda empieza cerrado y en Novedades se ven las cinco últimas. En Ayuda, cómo añadir la herramienta a la pantalla de inicio."],
  ["6.5.0","Saldo calculado para los movimientos añadidos a mano o desde capturas: se suma al último saldo del extracto y se marca como «calculado · provisional» hasta que importes el extracto. El efectivo de Patrimonio ya los incluye."],
  ["6.4.0","Capturas: si no se ve claro de qué banco es, la app pide la cuenta antes de añadir (Claude elige entre tus cuentas solo cuando es evidente). Al importar un extracto, los movimientos ya añadidos a mano o desde capturas se fusionan solos en vez de duplicarse. «Última importación» cuenta también las capturas."],
  ["6.3.1","Buscar movimientos en el móvil: al escribir ya no se reinicia el teclado (podías teclear varios números seguidos solo en otras pantallas)."],
@@ -2608,6 +2612,13 @@ function vReglas(){
   </section>`;
 }
 
+// Cómo tener la herramienta en la pantalla de inicio (versión de claude.ai; la versión web tiene su propio instalador)
+function homeHelp(){
+  let inst=false; try{ inst=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true||(window.top!==window&&window.top.matchMedia("(display-mode: standalone)").matches); }catch(e){}
+  if(inst) return `<h3>App instalada</h3><p class="sub" style="margin:0">Estás usando la herramienta desde la pantalla de inicio. Tus datos son los mismos en todos tus dispositivos.</p>`;
+  return `<h3>Añadir a la pantalla de inicio</h3><p class="sub" style="margin:0">Abre esta herramienta con un toque, como una app. Tus datos están en la base de datos de la herramienta, así que son los mismos en todos tus dispositivos.</p>
+  <b style="font-weight:600;margin-top:6px">iPhone / iPad</b><ol class="inst-steps"><li>Abre esta herramienta en <b>Safari</b>.</li><li>Pulsa <b>Compartir</b> (el cuadrado con la flecha hacia arriba).</li><li>Elige <b>«Añadir a pantalla de inicio»</b> y pulsa <b>«Añadir»</b>.</li></ol>
+  <b style="font-weight:600;margin-top:6px">Android</b><ol class="inst-steps"><li>Abre esta herramienta en <b>Chrome</b>.</li><li>Pulsa el <b>menú ⋮</b> (arriba a la derecha).</li><li>Elige <b>«Añadir a pantalla de inicio»</b> y confirma.</li></ol>`; }
 function vAyuda(){
   const ms=C().months;
   return `<section class="view guide">
@@ -2625,6 +2636,7 @@ function vAyuda(){
     <li><b>${ACCS().length?"Cualquier otro banco":"Cualquier banco"}</b>: Excel o CSV con columnas de fecha, concepto e importe (y saldo si lo trae). Las columnas se detectan solas, en español o en inglés.</li>
     <li><b>PDF</b>: ${ACCS().some(a=>isTRacc(a.id))?`el extracto de ${esc(ACCS().filter(a=>isTRacc(a.id)).map(a=>a.name).join(", "))} se lee directamente; `:""}${sample?"el de otros bancos lo lee Claude y verás la cadena de saldos antes de importar.":"para otros bancos, descarga el extracto en Excel o CSV."}</li>
     <li>Si el archivo es de otra forma, corrige las columnas en la vista previa.</li></ul></div>
+   <div class="panel inst-panel">${typeof installHTML==="function"?installHTML():homeHelp()}</div>
    <div class="panel"><h3>Exportar</h3>
     <div class="row"><button class="btn primary" id="exp-xlsx">Excel con todas las cuentas</button>${ACCS().map(a=>`<button class="btn" data-expacc="${esc(a.id)}">${esc(a.name)} (CSV)</button>`).join("")}</div>
     <p class="note">Mismas columnas que tus tablas, con Mes y Tipo de flujo ya calculados.</p>
@@ -2638,7 +2650,7 @@ function vAyuda(){
     </ul>
     ${ms.length?`<h3>Borrar datos</h3><div class="row"><select id="del-acc" style="width:auto"><option value="">Todas las cuentas</option>${ACCS().map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select><select id="del-m" style="width:auto"><option value="">Elige un mes…</option>${[...new Set(S.rows.map(r=>r.f.slice(0,7)))].sort().map(m=>`<option value="${m}">${mLabel(m)}</option>`).join("")}<option value="*">Todo</option></select><button class="btn danger" id="del-go">Borrar</button><span id="del-confirm"></span></div><p class="sub" style="margin:0">Por fecha real del movimiento.</p>`:""}</div>
   </div>
-  <div class="panel"><h3>Historial de versiones</h3>${CHANGELOG.map(([v,t])=>`<div><span class="code">v${v}</span> ${esc(t)}</div>`).join("")}</div>
+  ${CHANGELOG.length?`<details class="panel fold" data-fold="ayuda:hist"${FOLD["ayuda:hist"]?" open":""}><summary><h3>Historial de versiones</h3><span class="sub">v${APP_VERSION} · ${CHANGELOG.length} versiones</span></summary><div class="fold-b">${CHANGELOG.map(([v,t])=>`<div><span class="code">v${v}</span> ${esc(t)}</div>`).join("")}</div></details>`:""}
   </section>`;
 }
 
@@ -3415,7 +3427,8 @@ function openChangelog(){
   root.innerHTML=`<div class="drawer-bg" id="dbg"><div class="drawer" role="dialog" aria-label="Historial de cambios">
    <div class="row"><h2>Novedades</h2><span class="spacer"></span><button type="button" class="btn" id="cl-x">Cerrar</button></div>
    <p class="sub" style="margin:0">Versión actual: <b style="color:var(--fg)">v${APP_VERSION}</b> · ${CHANGELOG.length} versiones · mayor.menor.corrección</p>
-   <div class="cl">${CHANGELOG.map(([v,t],i)=>`<div class="cl-item${i===0?" now":""}"><b>v${esc(v)}</b><span>${esc(t)}${i===0?` <span class="pill p-ok">Actual</span>`:""}</span></div>`).join("")}</div>
+   ${(()=>{ const it=([v,t],i)=>`<div class="cl-item${i===0?" now":""}"><b>v${esc(v)}</b><span>${esc(t)}${i===0?` <span class="pill p-ok">Actual</span>`:""}</span></div>`;
+     return `<div class="cl">${CHANGELOG.slice(0,5).map(it).join("")}</div>${CHANGELOG.length>5?`<details class="cl-more"><summary>Ver las ${CHANGELOG.length-5} versiones anteriores</summary><div class="cl">${CHANGELOG.slice(5).map((x,i)=>it(x,i+5)).join("")}</div></details>`:""}`; })()}
   </div></div>`;
   const close=()=>{ root.innerHTML=""; };
   document.getElementById("cl-x").onclick=close;
