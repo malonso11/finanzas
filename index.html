@@ -759,7 +759,7 @@ details.info>p{margin:0}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="6.3.0";
+const APP_VERSION="6.3.1";
 const CHANGELOG=[];
 document.getElementById("app-ver").textContent=APP_VERSION;
 
@@ -1616,6 +1616,7 @@ document.addEventListener("click",e=>{ const t=e.target.closest&&e.target.closes
 window.addEventListener("scroll",hideTip,{passive:true});
 
 /* =================== VISTAS =================== */
+function m_tableLabels(){ document.getElementById("main").querySelectorAll(".tbl-wrap.cards table").forEach(t=>{ const hs=[...t.querySelectorAll("thead th")].map(x=>x.textContent.trim()); t.querySelectorAll("tbody tr").forEach(tr=>{ if(tr.querySelector("td[colspan]")) return; [...tr.children].forEach((td,k)=>{ if(hs[k]) td.dataset.label=hs[k]; }); }); }); }
 function render(){
   if(S.mode!=="init"&&!S._lk&&S.rows.length){ S._lk=true; if(linkRefunds()){ invalidate(); commit(); } }
   if(S.mode!=="init"&&!S.rows.length&&!ACCS().length&&!S.onbShown&&!document.querySelector(".onb")){ S.onbShown=true; setTimeout(openOnboarding,0); }
@@ -1629,7 +1630,7 @@ function render(){
   document.getElementById("mb-dot").hidden=!rd.total; document.getElementById("mb-title").textContent=SECTIONS[secOf(S.view)].n;
   const m=document.getElementById("main");
   m.innerHTML=(S.view==="movimientos"?"":remindBanner())+({inicio:vInicio,movimientos:vMov,revision:vRev,resumen:vResumen,ahorro:vAhorro,patrimonio:vPatri,limites:vLim,reglas:vReglas,ayuda:vAyuda}[S.view])(rd);
-  m.querySelectorAll(".tbl-wrap.cards table").forEach(t=>{ const hs=[...t.querySelectorAll("thead th")].map(x=>x.textContent.trim()); t.querySelectorAll("tbody tr").forEach(tr=>{ if(tr.querySelector("td[colspan]")) return; [...tr.children].forEach((td,k)=>{ if(hs[k]) td.dataset.label=hs[k]; }); }); });
+  m_tableLabels();
   decorate(m,rd);
   (bind[S.view]||(()=>{}))();
 }
@@ -1755,9 +1756,9 @@ function vMov(){
    <select id="flt-flag" style="width:auto" aria-label="Filtro"><option value="">Todas las filas</option><option value="revisar"${f.flag==="revisar"?" selected":""}>Sin identificar</option><option value="obs"${f.flag==="obs"?" selected":""}>Con observaciones</option><option value="ajuste"${f.flag==="ajuste"?" selected":""}>Con ajustes o correcciones</option><option value="ticket"${f.flag==="ticket"?" selected":""}>Con ticket</option><option value="sinticket"${f.flag==="sinticket"?" selected":""}>Gastos sin ticket</option><option value="extra"${f.flag==="extra"?" selected":""}>Extraordinarios</option></select>
    ${assets&&sample?`<button class="btn sm" id="tk-btn" type="button">${svgIcon("receipt",14)} Leer ticket</button>`:""}
    <button class="btn sm" id="sel-all-btn">${l.length&&l.every(r=>S.sel.has(r.id))?"Quitar selección":`Seleccionar todo (${l.length})`}</button>
-   <span class="spacer"></span><span class="sub">${l.length} filas · suma <b style="font-family:var(--f-mono)">${eur(sum)}</b></span></div>
-  ${isMobile()?(shown.length?`<div class="mvlist">${mobileList(shown)}</div>`:`<div class="panel empty">Ninguna fila coincide con el filtro.</div>`):`<div class="tbl-wrap"><table><thead><tr><th class="selcell"><input type="checkbox" id="sel-all" aria-label="Seleccionar todas las filas filtradas"></th><th>Fecha</th><th>Cuenta</th><th>Descripción</th><th>Categoría</th><th>Mes</th><th>Flujo</th><th class="num">Importe</th><th class="num">Saldo</th></tr></thead><tbody>${rows||`<tr><td colspan="9" class="empty">Ninguna fila coincide con el filtro.</td></tr>`}</tbody></table></div>`}
-  ${pages>1?`<div class="row"><button class="btn sm" id="pg-prev"${S.page?"":" disabled"}>Más recientes</button><span class="sub">Página ${S.page+1} de ${pages}</span><button class="btn sm" id="pg-next"${S.page<pages-1?"":" disabled"}>Más antiguos</button></div>`:""}
+   <span class="spacer"></span><span class="sub" id="mov-sum">${l.length} filas · suma <b style="font-family:var(--f-mono)">${eur(sum)}</b></span></div>
+  <div id="mov-res">${isMobile()?(shown.length?`<div class="mvlist">${mobileList(shown)}</div>`:`<div class="panel empty">Ninguna fila coincide con el filtro.</div>`):`<div class="tbl-wrap"><table><thead><tr><th class="selcell"><input type="checkbox" id="sel-all" aria-label="Seleccionar todas las filas filtradas"></th><th>Fecha</th><th>Cuenta</th><th>Descripción</th><th>Categoría</th><th>Mes</th><th>Flujo</th><th class="num">Importe</th><th class="num">Saldo</th></tr></thead><tbody>${rows||`<tr><td colspan="9" class="empty">Ninguna fila coincide con el filtro.</td></tr>`}</tbody></table></div>`}
+  ${pages>1?`<div class="row"><button class="btn sm" id="pg-prev"${S.page?"":" disabled"}>Más recientes</button><span class="sub">Página ${S.page+1} de ${pages}</span><button class="btn sm" id="pg-next"${S.page<pages-1?"":" disabled"}>Más antiguos</button></div>`:""}</div>
   <div class="selbar" id="selbar" role="region" aria-label="Filas seleccionadas" hidden><span><b id="sel-n">0</b> seleccionadas</span><select id="sel-c" aria-label="Nueva categoría"><option value="">Elige la nueva categoría…</option>${catSubOptions("",false)}</select><button class="btn primary" id="sel-go">Reasignar categoría</button><button class="btn" id="sel-extra" title="Marca o desmarca como gasto extraordinario (puntual)">★ Extraordinario</button><button class="btn" id="sel-clear">Quitar selección</button></div>`
   :`<div class="panel empty">${S.mode==="init"?"Cargando…":"Aún no hay movimientos. Empieza importando un extracto de cada cuenta."}</div>`}
   </section>`;
@@ -3044,7 +3045,7 @@ const bind={
   movimientos(){
     on("file-in","change",e=>handleFiles([...e.target.files]));
     const dr=document.getElementById("drop");
-    if(dr){ ["dragenter","dragover"].forEach(ev=>dr.addEventListener(ev,e=>{e.preventDefault();dr.classList.add("over");})); ["dragleave","drop"].forEach(ev=>dr.addEventListener(ev,e=>{e.preventDefault();dr.classList.remove("over");})); dr.addEventListener("drop",e=>handleFiles([...e.dataTransfer.files])); }
+    if(dr&&!dr.dataset.b){ dr.dataset.b="1"; ["dragenter","dragover"].forEach(ev=>dr.addEventListener(ev,e=>{e.preventDefault();dr.classList.add("over");})); ["dragleave","drop"].forEach(ev=>dr.addEventListener(ev,e=>{e.preventDefault();dr.classList.remove("over");})); dr.addEventListener("drop",e=>handleFiles([...e.dataTransfer.files])); }
     all("[data-bmap]",s=>s.onchange=()=>{ S.pending[+s.dataset.bmap].map[s.dataset.k]=+s.value; render(); });
     all("[data-bacc]",s=>s.onchange=()=>{ S.pending[+s.dataset.bacc].acc=s.value; render(); });
     all("[data-brev]",s=>s.onchange=()=>{ S.pending[+s.dataset.brev].reverse=s.checked; render(); });
@@ -3076,7 +3077,13 @@ const bind={
     on("drill-clear","click",()=>{ S.back=null; S.filter={q:"",acc:"",mes:"",cat:"",flag:""}; S.page=0; render(); });
     on("imp-go","click",doImport);
     all("[data-open]",tr=>{ tr.onclick=e=>{ if(e.target.closest&&e.target.closest(".selcell,[data-sel]")) return; openRow(tr.dataset.open); }; tr.onkeydown=e=>{ if(e.key==="Enter") openRow(tr.dataset.open); }; });
-    const q=document.getElementById("flt-q"); if(q) q.oninput=()=>{ S.filter.q=q.value; S.page=0; debounce("flt",()=>{ render(); const n=document.getElementById("flt-q"); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length);} },250); };
+    // Al buscar solo se rehacen los resultados: el campo no se toca y el teclado del iPhone se queda como estaba (números, símbolos…)
+    const q=document.getElementById("flt-q"); if(q) q.oninput=()=>{ S.filter.q=q.value; S.page=0; debounce("flt",()=>{
+      const res=document.getElementById("mov-res"); if(!res||S.view!=="movimientos"){ render(); return; }
+      const t=document.createElement("div"); t.innerHTML=vMov();
+      res.replaceWith(t.querySelector("#mov-res"));
+      const sm=document.getElementById("mov-sum"), ns=t.querySelector("#mov-sum"); if(sm&&ns) sm.innerHTML=ns.innerHTML;
+      m_tableLabels(); bind.movimientos(); },250); };
     [["flt-acc","acc"],["flt-mes","mes"],["flt-cat","cat"],["flt-flag","flag"]].forEach(([id,k])=>on(id,"change",e=>{ S.filter[k]=e.target.value; S.page=0; render(); }));
     on("pg-prev","click",()=>{ S.page--; render(); window.scrollTo(0,0); }); on("pg-next","click",()=>{ S.page++; render(); window.scrollTo(0,0); });
   },
