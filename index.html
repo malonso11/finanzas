@@ -725,6 +725,18 @@ details.info>p{margin:0}
 .lightbox .btn.danger.confirm{background:var(--bad);color:#fff;border-color:var(--bad)}
 .ci-send{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:14px;background:var(--accent-soft)}
 .ci-send h3{margin:0}
+.linkbtn{flex:1;min-width:0;text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
+.linkbtn:hover b{color:var(--accent)}
+.an-pick>summary{list-style:none;cursor:pointer;color:var(--accent);font-size:14px;font-weight:500}
+.an-pick>summary::-webkit-details-marker{display:none}
+.an-pick[open]>summary{margin-bottom:8px}
+.an-pick input{width:100%;margin-bottom:8px}
+.an-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto}
+.an-c{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;cursor:pointer}
+.an-c:hover{border-color:var(--accent)}
+.an-c .ell{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.an-c .ell small{display:block}
+.an-c>b{white-space:nowrap;font-variant-numeric:tabular-nums}
 .onb-priv{margin:22px auto 0;max-width:560px;text-align:left;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--ok) 10%,transparent);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);font-size:14px;line-height:1.45}.onb-priv b{display:block;margin-bottom:4px}.onb-priv p{margin:4px 0 0}</style>
 
 <header class="top">
@@ -747,7 +759,7 @@ details.info>p{margin:0}
 <div id="tt" role="tooltip"></div>
 
 <script>
-const APP_VERSION="6.2.0";
+const APP_VERSION="6.3.0";
 const CHANGELOG=[];
 document.getElementById("app-ver").textContent=APP_VERSION;
 
@@ -1215,7 +1227,7 @@ function findChargeFor(r,acc){
 }
 // Reglas automáticas de ajuste: alquiler adelantado y devoluciones obvias
 function autoAdjust(){
-  for(const r of S.rows){ if(r.mesSrc==="alquiler"){ delete r.mesOv; delete r.mesSrc; } if(r.flujoSrc==="devolucion"){ delete r.flujoOv; delete r.flujoSrc; } }
+  for(const r of S.rows){ if(r.mesSrc==="alquiler"){ delete r.mesOv; delete r.mesSrc; } if(r.flujoSrc==="devolucion"){ delete r.flujoOv; delete r.flujoSrc; } if(r.anulaSrc==="auto"){ delete r.anula; delete r.anulaSrc; } }
   for(const A of ACCS().filter(a=>!isTRacc(a.id))){
   const ing=sortRows(S.rows.filter(r=>r.acc===A.id));
   let nom=null;
@@ -1233,7 +1245,19 @@ function autoAdjust(){
     if(REFUND_RE.test(d)&&!NOT_REFUND_RE.test(d)){ r.flujoOv="Gasto"; r.flujoSrc="devolucion"; r.flujoNote="La descripción indica devolución"; continue; }
     if(isTRacc(r.acc)&&r.tipo==="Transacción con tarjeta"){ const ch=findChargeFor(r,r.acc); if(ch){ r.flujoOv="Gasto"; r.flujoSrc="devolucion"; r.flujoNote="Compensa el cargo del "+fdate(ch.f)+" ("+eur(ch.imp)+")"; } }
   }
+  // Cada devolución queda ligada al gasto que anula (salvo que la hayas ligado o desligado a mano)
+  linkRefunds();
 }
+// Comercio de un movimiento sin los prefijos del banco («Devolución Tarjeta», «Pago en», «Recibo»…)
+function refKey(d){ const w=lo(d).replace(/^(devoluci[oó]n|abono|reembolso|anulaci[oó]n|pago|compra|cargo|recibo|transacci[oó]n|transferencia)(\s+(de|en|con|tarjeta|recibo|compra|emitida|recibida))*\s+/,"").replace(/[^a-z0-9 ]/g," ").split(" ").filter(x=>x.length>2&&!/^(www|com|es|sau|sl|sa)$/.test(x)); return w[0]||""; }
+// Gasto que anula una devolución: mismo comercio, importe igual o mayor, como mucho 120 días antes
+function chargeForRefund(r){ const k=refKey(r.desc); if(!k) return null;
+  return S.rows.filter(x=>x.imp<0&&x.f<=r.f&&daysBetween(x.f,r.f)<=120&&-x.imp>=r.imp*0.95&&refKey(x.desc)===k)
+    .map(x=>({x,s:daysBetween(x.f,r.f)+(x.acc===r.acc?0:30)-(Math.abs(-x.imp-r.imp)<0.011?60:0)-(merchantKey(x.desc.replace(/^(pago en|compra en|recibo)\s+/i,""))===merchantKey(r.desc.replace(/^(devoluci[oó]n( de)?( tarjeta| recibo)?)\s+/i,""))?40:0)})).sort((a,b)=>a.s-b.s).map(o=>o.x)[0]||null; }
+function linkRefunds(){ let n=0; for(const r of S.rows){ if(r.imp<=0||r.flujoOv!=="Gasto"||r.anula) continue; const ch=chargeForRefund(r); if(ch){ r.anula=[ch.id]; r.anulaSrc="auto"; n++; } } return n; }
+// Devoluciones ligadas: gastos que anula una fila y filas que anulan un gasto
+const anulaRows=r=>(r.anula||[]).map(i=>S.rows.find(x=>x.id===i)).filter(Boolean);
+const anuladoPor=id=>S.rows.filter(x=>x.imp>0&&x.flujoOv==="Gasto"&&(x.anula||[]).includes(id));
 function reapplyAll(){ const before=JSON.stringify(S.rows.map(r=>[r.cat,r.sub,r.mesOv,r.flujoOv])); S.rows.forEach(categorize); autoAdjust(); invalidate(); const after=JSON.stringify(S.rows.map(r=>[r.cat,r.sub,r.mesOv,r.flujoOv])); commit(); return before!==after; }
 function ensureTaxonomy(cat,sub){
   if(!cat) return;
@@ -1593,6 +1617,7 @@ window.addEventListener("scroll",hideTip,{passive:true});
 
 /* =================== VISTAS =================== */
 function render(){
+  if(S.mode!=="init"&&!S._lk&&S.rows.length){ S._lk=true; if(linkRefunds()){ invalidate(); commit(); } }
   if(S.mode!=="init"&&!S.rows.length&&!ACCS().length&&!S.onbShown&&!document.querySelector(".onb")){ S.onbShown=true; setTimeout(openOnboarding,0); }
   hideTip(); applyUI(); renderFresh(); document.getElementById("main").classList.remove("has-sel");
   setStatus();
@@ -1696,12 +1721,13 @@ const isMobile=()=>window.matchMedia("(max-width:700px)").matches;
 const dayLabel=f=>new Date(f+"T12:00:00").toLocaleDateString("es-ES",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
 function mobileList(rows){
   let h="",day="";
+  const AN=new Map(); S.rows.forEach(x=>{ if(x.imp>0&&x.flujoOv==="Gasto") (x.anula||[]).forEach(i=>AN.set(i,(AN.get(i)||0)+x.imp)); });
   for(const r of rows){
     if(r.f!==day){ day=r.f; h+=`<div class="mvday">${dayLabel(day)}</div>`; }
     const fl=flujo(r);
     const on_=S.sel.has(r.id);
     h+=`<div class="mvrow${on_?" selected":""}"><label class="mvchk"><input type="checkbox" data-sel="${r.id}" aria-label="Seleccionar"${on_?" checked":""}></label>${catBadge(r.cat)}<button class="mv" data-open="${r.id}"><div class="mv-top"><span class="mv-desc">${esc(r.desc)}</span><span class="mv-imp"${r.imp>0?' style="color:var(--ok)"':""}>${eur(r.imp)}</span></div>
-     <div class="mv-meta"><span class="acc">${esc(accShort(r.acc))}</span><span>${esc(r.sub||r.cat)}</span>${(r.att||[]).length?`<span class="attflag">${clipIcon}</span>`:""}${r.src==="fallback"?`<span class="flag">sin identificar</span>`:""}${r.mesOv?`<span class="flag">↷ ${r.mesOv}</span>`:""}${r.flujoOv?`<span class="flag">⚑ anula gasto</span>`:""}${r.obs?`<span class="flag">✎ nota</span>`:""}${r.extra?`<span class="flag">★ extra</span>`:""}${fl==="Movimiento interno"||fl==="Ahorro/Inversión"?`<span class="pill p-acc">${fl}</span>`:""}</div></button></div>`;
+     <div class="mv-meta"><span class="acc">${esc(accShort(r.acc))}</span><span>${esc(r.sub||r.cat)}</span>${(r.att||[]).length?`<span class="attflag">${clipIcon}</span>`:""}${r.src==="fallback"?`<span class="flag">sin identificar</span>`:""}${r.mesOv?`<span class="flag">↷ ${r.mesOv}</span>`:""}${r.flujoOv?`<span class="flag">⚑ anula ${(()=>{ const L=anulaRows(r); return L.length?"«"+esc(shortDesc(L[0].desc).slice(0,22))+"» del "+fdate(L[0].f).slice(0,5)+(L.length>1?" +"+(L.length-1):""):"gasto"; })()}</span>`:""}${AN.has(r.id)?`<span class="flag">↺ devuelto ${eur(AN.get(r.id))}</span>`:""}${r.obs?`<span class="flag">✎ nota</span>`:""}${r.extra?`<span class="flag">★ extra</span>`:""}${fl==="Movimiento interno"||fl==="Ahorro/Inversión"?`<span class="pill p-acc">${fl}</span>`:""}</div></button></div>`;
   }
   return h;
 }
@@ -2521,13 +2547,35 @@ function vAyuda(){
 }
 
 /* =================== EDITOR DE FILA =================== */
+
+// Ficha de una devolución: gastos ligados, quitar enlaces y elegir otros
+function drawAnula(id){
+  const el=document.getElementById("rf-anula"); if(!el) return; const r=S.rows.find(x=>x.id===id); if(!r) return;
+  const L=anulaRows(r), tot=L.reduce((t,x)=>t-x.imp,0), dif=L.find(x=>x.cat!==r.cat||x.sub!==r.sub);
+  el.innerHTML=(L.length?L.map(x=>`<div class="accrow">${catBadge(x.cat)}<button type="button" class="linkbtn" data-goto="${x.id}"><b style="font-weight:600">${esc(x.desc)}</b><div class="sub">${fdate(x.f)} · ${esc(accShort(x.acc))} · ${esc(x.cat)} › ${esc(x.sub)}</div></button><b style="white-space:nowrap">${eur(x.imp)}</b><button type="button" class="btn sm" data-unl="${x.id}">Quitar</button></div>`).join("")
+      +`<p class="sub" style="margin:0">${Math.abs(tot-r.imp)<0.011?"Devolución total del gasto.":r.imp<tot?`Devolución parcial: ${eur(r.imp)} de ${eur(tot)}.`:`Devuelve ${eur(r.imp)}, más que los gastos ligados (${eur(tot)}).`}${r.anulaSrc==="auto"?" Ligada automáticamente.":""}</p>`
+      +(dif?`<p class="note warn" style="margin:0">Esta devolución resta de «${esc(r.cat)} › ${esc(r.sub)}», pero el gasto es de «${esc(dif.cat)} › ${esc(dif.sub)}».</p><div><button type="button" class="btn sm" id="an-cat">Usar la categoría del gasto</button></div>`:"")
+    :`<p class="sub" style="margin:0">No está ligada a ningún gasto. Elige el que anula para verlos juntos.</p>`)
+    +`<details class="an-pick"${L.length?"":" open"}><summary>${L.length?"Ligar otro gasto":"Elegir el gasto que anula"}</summary><input type="search" id="an-q" placeholder="Buscar por concepto o importe" aria-label="Buscar gasto"><div class="an-list" id="an-list"></div></details>`;
+  const k=refKey(r.desc);
+  const list=q=>{ const Q=lo(q||"").trim();
+    const c=S.rows.filter(x=>x.imp<0&&!(r.anula||[]).includes(x.id)&&x.f<=r.f&&daysBetween(x.f,r.f)<=365&&catTipo(x.cat)==="gasto"&&(!Q||lo(x.desc).includes(Q)||String(-x.imp).includes(Q.replace(",","."))))
+      .map(x=>({x,s:daysBetween(x.f,r.f)-(k&&refKey(x.desc)===k?400:0)-(Math.abs(-x.imp-r.imp)<0.011?300:0)-(x.cat===r.cat?100:0)})).sort((a,b)=>a.s-b.s).slice(0,12).map(o=>o.x);
+    document.getElementById("an-list").innerHTML=c.length?c.map(x=>`<button type="button" class="an-c" data-lnk="${x.id}">${catBadge(x.cat)}<span class="ell"><b style="font-weight:500">${esc(x.desc)}</b><small class="sub">${fdate(x.f)} · ${esc(accShort(x.acc))} · ${esc(x.sub||x.cat)}</small></span><b>${eur(x.imp)}</b></button>`).join(""):`<p class="sub" style="margin:0">No hay gastos que coincidan.</p>`;
+    document.querySelectorAll("#an-list [data-lnk]").forEach(b=>b.onclick=()=>{ const x=S.rows.find(y=>y.id===b.dataset.lnk); r.anula=(r.anula||[]).concat([x.id]); r.anulaSrc="manual"; r.log=(r.log||[]).concat([{d:today(),t:`Ligada al gasto del ${fdate(x.f)} (${eur(x.imp)})`}]); invalidate(); commit(); drawAnula(id); toast("Devolución ligada"); }); };
+  list(""); const q=document.getElementById("an-q"); q.oninput=()=>list(q.value);
+  el.querySelectorAll("[data-goto]").forEach(b=>b.onclick=()=>openRow(b.dataset.goto));
+  el.querySelectorAll("[data-unl]").forEach(b=>b.onclick=()=>{ r.anula=(r.anula||[]).filter(i=>i!==b.dataset.unl); r.anulaSrc="manual"; r.log=(r.log||[]).concat([{d:today(),t:"Enlace con un gasto quitado"}]); invalidate(); commit(); drawAnula(id); });
+  const ac=document.getElementById("an-cat"); if(ac) ac.onclick=()=>{ r.cat=dif.cat; r.sub=dif.sub; r.src="manual"; r.srcNote="Categoría del gasto que anula"; r.log=(r.log||[]).concat([{d:today(),t:`Categoría → ${dif.cat} › ${dif.sub} (la del gasto que anula)`}]);
+    const sel=document.getElementById("rf-cat"); if(sel) sel.value=dif.cat+"|"+dif.sub; invalidate(); commit(); drawAnula(id); toast("Ahora resta de la categoría del gasto"); };
+}
 function openRow(id){
   const r0=S.rows.find(x=>x.id===id); if(!r0) return;
   const r=structuredClone(r0);
   const ms=[]; for(let i=-2;i<=3;i++) ms.push(addMonths(r.f.slice(0,7),i));
   const root=document.getElementById("drawer-root");
   const parts=[];
-  setTimeout(()=>{ drawAtts(id); bindAttInputs(id); },0);
+  setTimeout(()=>{ drawAtts(id); bindAttInputs(id); drawAnula(id); document.querySelectorAll("#rf [data-goto]").forEach(b=>b.onclick=()=>openRow(b.dataset.goto)); },0);
   root.innerHTML=`<div class="drawer-bg" id="dbg"><form class="drawer" id="rf" aria-label="Editar movimiento">
    <div class="row"><h2>Movimiento</h2><span class="acc">${esc(accShort(r.acc))}</span><span class="spacer"></span><button type="button" class="btn" id="rf-x">Cerrar</button></div>
    <dl class="kv"><dt>Fecha</dt><dd>${fdate(r.f)}</dd><dt>Descripción</dt><dd>${esc(r.desc)}</dd>${r.tipo?`<dt>Tipo</dt><dd>${esc(r.tipo)}${r.tipoRaw&&r.tipoRaw!==r.tipo?` (${esc(r.tipoRaw)})`:""}</dd>`:""}<dt>Importe</dt><dd>${eur(r.imp)}</dd><dt>Saldo</dt><dd>${eur(r.saldo)}</dd>${r.bcat?`<dt>Categoría del banco</dt><dd>${esc(r.bcat)} › ${esc(r.bsub)}</dd>`:""}<dt>Origen de la categoría</dt><dd>${esc(SRC_LBL[r.src]||r.src)}${r.srcNote?" · "+esc(r.srcNote):""}</dd></dl>
@@ -2542,6 +2590,8 @@ function openRow(id){
     <label class="f"><span>Tipo de flujo</span><select id="rf-fl"><option value="">Automático (${r.imp>=0?"por signo":"Gasto"})</option><option value="Gasto"${r.flujoOv==="Gasto"?" selected":""}>Forzar Gasto (anula un gasto)</option></select><small class="sub">${r.flujoOv?esc(r.flujoNote||"Forzado"):"Para devoluciones que compensan un cargo."}</small></label>
     ${r.tipo==="Operar"?`<label class="f"><span>Unidades ETF</span><input type="number" step="0.000001" id="rf-u" value="${r.units??""}"></label><label class="f"><span>ISIN</span><input id="rf-isin" value="${esc(isinOf(r))}" maxlength="12" style="text-transform:uppercase"></label>`:""}
    </div>
+   ${r.imp>0&&r.flujoOv==="Gasto"?`<fieldset><legend>Gastos que anula</legend><div id="rf-anula" style="display:flex;flex-direction:column;gap:8px"></div></fieldset>`:""}
+   ${r.imp<0&&anuladoPor(r.id).length?(()=>{ const D=anuladoPor(r.id), t=D.reduce((a,x)=>a+x.imp,0); return `<fieldset><legend>Devoluciones de este gasto</legend>${D.map(x=>`<div class="accrow">${catBadge(x.cat)}<button type="button" class="linkbtn" data-goto="${x.id}"><b style="font-weight:600">${esc(x.desc)}</b><div class="sub">${fdate(x.f)} · ${esc(accShort(x.acc))}</div></button><b style="white-space:nowrap;color:var(--ok)">${eur(x.imp)}</b></div>`).join("")}<p class="sub" style="margin:0">${t>=-r.imp-0.01?"Devuelto entero":`Devuelto ${eur(t)} de ${eur(-r.imp)}`} · gasto neto ${eur(Math.min(0,r.imp+t))}</p></fieldset>`; })():""}
    <fieldset><legend>Regla para los siguientes movimientos</legend>
     <p class="sub" style="margin:0">Los movimientos ${isTRacc(r.acc)?"con tarjeta ":""}de ${esc(accName(r.acc))} cuya descripción contenga este texto irán siempre a la categoría elegida. También se aplica a los que ya tienes, salvo los corregidos a mano.</p>
     <div class="row"><input id="rr-k" value="${esc(ruleText(r.desc))}" style="flex:1;min-width:150px" aria-label="Texto de la regla"><select id="rr-c" style="flex:1;min-width:200px" aria-label="Categoría de la regla">${catSubOptions(r.cat+"|"+r.sub)}</select><button type="button" class="btn sm" id="rr-go">Crear regla</button></div>
@@ -2584,7 +2634,7 @@ function openRow(id){
     const xe=document.getElementById("rf-extra").checked; if(!!x.extra!==xe){ if(xe) x.extra=true; else delete x.extra; log.push(xe?"Marcado como extraordinario":"Ya no es extraordinario"); }
     x.com=document.getElementById("rf-com").value; const ob=document.getElementById("rf-obs").value; if(ob!==x.obs){ x.obs=ob; }
     const mo=document.getElementById("rf-mes").value; if((mo||"")!==(x.mesOv||"")){ log.push(`Mes contable → ${mo||"automático"}`); if(mo){x.mesOv=mo;x.mesSrc="manual";} else {delete x.mesOv; delete x.mesSrc;} }
-    const fo=document.getElementById("rf-fl").value; if((fo||"")!==(x.flujoOv||"")){ log.push(`Flujo → ${fo||"automático"}`); if(fo){x.flujoOv="Gasto";x.flujoSrc="manual";x.flujoNote="Forzado a mano";} else {delete x.flujoOv; x.flujoSrc="manual-no"; delete x.flujoNote;} }
+    const fo=document.getElementById("rf-fl").value; if((fo||"")!==(x.flujoOv||"")){ log.push(`Flujo → ${fo||"automático"}`); if(fo){x.flujoOv="Gasto";x.flujoSrc="manual";x.flujoNote="Forzado a mano";} else {delete x.flujoOv; x.flujoSrc="manual-no"; delete x.flujoNote; delete x.anula; delete x.anulaSrc;} }
     const ii=document.getElementById("rf-isin"); if(ii){ const v=ii.value.trim().toUpperCase(); if(v!==isinOf(x)){ x.isin=v; log.push("ISIN → "+(v||"vacío")); } }
     const u=document.getElementById("rf-u"); if(u){ const v=parseNum(u.value); if(v!==x.units){ x.units=v; log.push("Unidades ETF → "+u.value); } }
     if(log.length) x.log=(x.log||[]).concat(log.map(t=>({d:today(),t})));
@@ -3046,7 +3096,7 @@ const bind={
     all("[data-tper]",b=>b.onclick=()=>{ const id=b.dataset.tper, n=nameOf(id); if(!check(id,n)) return; if(!S.cfg.people.some(x=>lo(x)===lo(n))) S.cfg.people=S.cfg.people.concat([n]); after(rowOf(id),`«${n}» añadido a personas conocidas`); });
     all("[data-town]",b=>b.onclick=()=>{ const id=b.dataset.town, r=rowOf(id), iban=(r.desc.match(IBAN_RE)||[])[1]; const n=iban||nameOf(id); if(!iban&&!check(id,n)) return; if(!S.cfg.ownNames.some(x=>lo(x)===lo(n))) S.cfg.ownNames=S.cfg.ownNames.concat([n]); after(r,`${iban?"IBAN":"Nombre"} «${n}» registrado como tuyo`); });
     all("[data-tinc]",b=>b.onclick=()=>{ const x=S.rows.find(r=>r.id===b.dataset.tinc); x.src="manual"; x.srcNote="Confirmado como ingreso real"; x.log=(x.log||[]).concat([{d:today(),t:"Confirmado como ingreso real"}]); invalidate(); commit(); render(); });
-    all("[data-refund]",b=>b.onclick=()=>{ const x=S.rows.find(r=>r.id===b.dataset.refund); x.flujoOv="Gasto"; x.flujoSrc="manual"; x.flujoNote="Devolución que anula un gasto (revisión)"; x.log=(x.log||[]).concat([{d:today(),t:"Marcada como devolución"}]); invalidate(); commit(); render(); toast("Ahora resta del gasto de su categoría"); });
+    all("[data-refund]",b=>b.onclick=()=>{ const x=S.rows.find(r=>r.id===b.dataset.refund); x.flujoOv="Gasto"; x.flujoSrc="manual"; x.flujoNote="Devolución que anula un gasto (revisión)"; { const ch=chargeForRefund(x); if(ch&&!x.anula){ x.anula=[ch.id]; x.anulaSrc="manual"; } } x.log=(x.log||[]).concat([{d:today(),t:"Marcada como devolución"}]); invalidate(); commit(); render(); toast("Ahora resta del gasto de su categoría"); });
     all("[data-noref]",b=>b.onclick=()=>{ S.cfg.dismissed=Object.assign({},S.cfg.dismissed,{["ref|"+b.dataset.noref]:1}); saveCfg(); invalidate(); render(); });
     all("[data-obsok]",b=>b.onclick=()=>{ const x=S.rows.find(r=>r.id===b.dataset.obsok); x.log=(x.log||[]).concat([{d:today(),t:"Observación resuelta: "+x.obs}]); x.obs=""; invalidate(); commit(); render(); });
     all("[data-fcat]",b=>b.onclick=()=>{ pushNav(); S.filter={q:"",acc:"",mes:"",cat:b.dataset.fcat,flag:""}; S.view="movimientos"; render(); });
