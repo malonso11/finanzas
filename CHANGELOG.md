@@ -2,6 +2,10 @@
 
 Qué se entregó en cada versión.
 
+## [7.0.1]
+
+**Corrección.** Limpieza interna de los estilos: fuera los estilos antiguos que ya no se usaban. La app se ve exactamente igual y carga un poco menos.
+
 ## [7.0.0]
 
 **Nueva versión mayor.** Nuevo diseño: tipografía Outfit, verde oliva como único color de acento, fondo blanco con paneles sin bordes, cifras grandes en trazo fino, antetítulo en cada página, fichas en hoja flotante, pie de página y menú del móvil hasta 900 px de ancho. Un único estilo visual (desaparece la elección Suave, Sólido o Contorno); el modo claro u oscuro se sigue eligiendo en Apariencia.

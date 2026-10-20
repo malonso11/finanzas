@@ -6,7 +6,7 @@
 
 **Herramienta web gratuita para organizar tus finanzas personales a partir de los extractos de tus bancos**
 
-[![Versión](https://img.shields.io/badge/versión-7.0.0-e6a23c?style=for-the-badge)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versión-7.0.1-e6a23c?style=for-the-badge)](CHANGELOG.md)
 [![Web](https://img.shields.io/badge/web-GitHub_Pages-2C7A4B?style=for-the-badge)](https://malonso11.github.io/finanzas/)
 [![Datos](https://img.shields.io/badge/datos-solo_en_tu_dispositivo-6b747c?style=for-the-badge)](#-privacidad)
 
