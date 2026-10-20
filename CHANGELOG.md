@@ -2,6 +2,10 @@
 
 Qué se entregó en cada versión.
 
+## [7.0.2]
+
+**Corrección.** Más seguridad: las librerías externas (lectura de Excel y PDF, copias en zip, informes PDF y lector de capturas) se comprueban antes de ejecutarse. Si alguien las alterara en el servidor de origen, la app no las carga.
+
 ## [7.0.1]
 
 **Corrección.** Limpieza interna de los estilos: fuera los estilos antiguos que ya no se usaban. La app se ve exactamente igual y carga un poco menos.
